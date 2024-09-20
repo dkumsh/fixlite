@@ -25,6 +25,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             let mut field_initializers = Vec::new();
             let mut field_names = Vec::new();
             let mut field_checks = Vec::new();
+            let mut known_tags = Vec::new(); // Collect known tags
 
             if let Fields::Named(ref fields_named) = data_struct.fields {
                 for field in &fields_named.named {
@@ -40,20 +41,30 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     for attr in &field.attrs {
                         if attr.path.is_ident("fix") {
                             let (tag, ty) = parse_fix_attribute(attr).unwrap();
-                            tag_value = Some(tag);
+                            tag_value = Some(tag.clone());
                             type_value = Some(ty);
+                            known_tags.push(tag); // Collect known tags
                         } else if attr.path.is_ident("fix_group") {
                             let tag = parse_fix_group_attribute(attr).unwrap();
-                            tag_value = Some(tag);
+                            tag_value = Some(tag.clone());
                             is_group = true;
+                            known_tags.push(tag); // Collect known tags
                         }
                     }
 
                     // Generate code for field initialization.
                     let field_var = format_ident!("{}_tmp", field_name);
-                    field_initializers.push(quote! {
-                        let mut #field_var: Option<#field_type> = None;
-                    });
+                    // Extract inner type from Option<T>
+                    if let Some(inner_type) = extract_inner_type(field_type, "Option") {
+                        // Field type is Option<T>, so use T
+                        field_initializers.push(quote! {
+                            let mut #field_var: Option<#inner_type> = None;
+                        });
+                    } else {
+                        field_initializers.push(quote! {
+                            let mut #field_var: Option<#field_type> = None;
+                        });
+                    }
 
                     if let Some(tag) = tag_value {
                         if is_group {
@@ -62,7 +73,12 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             field_parsers.push(group_parser);
                         } else {
                             // Generate code for regular field parsing.
-                            let parser = generate_field_parser(field_name, field_type, &type_value.unwrap(), tag);
+                            let parser = generate_field_parser(
+                                field_name,
+                                field_type,
+                                &type_value.unwrap(),
+                                tag,
+                            );
                             field_parsers.push(parser);
                         }
 
@@ -72,40 +88,50 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     }
                 }
             }
+            // Sort the known tags for binary search.
+            known_tags.sort();
+            let known_tags_len = known_tags.len();
+            let known_tags_tokens = known_tags.iter().map(|tag| quote! { #tag });
 
-            let fix_deserialize_path = quote!(::fix);
+            let fix_module_path = quote!(::fix);
 
             // Combine all parts into the final implementation.
             quote! {
-                impl #fix_deserialize_path::FixDeserialize for #struct_name {
-                    fn from_fix_message(fix_message: &[u8]) -> Result<Self, #fix_deserialize_path::FixError> {
+                impl #fix_module_path::FixDeserialize for #struct_name {
+                    fn from_fix_message(fix_message: &[u8]) -> Result<Self, #fix_module_path::FixError> {
                         let fix_message_str = std::str::from_utf8(fix_message)?;
                         let mut fields = fix_message_str.split('|').peekable();
 
-                        Self::from_fix_message_iter(&mut fields)
+                        Self::from_fix_message_iter(&mut fields, |_|false)
                     }
 
-                    fn from_fix_message_iter<'a, I>(fields: &mut std::iter::Peekable<I>) -> Result<Self, #fix_deserialize_path::FixError>
+                    fn from_fix_message_iter<'a, I, F>(
+                        fields: &mut std::iter::Peekable<I>,
+                        is_a_parent_tag: F,
+                    ) -> Result<Self, #fix_module_path::FixError>
                     where
                         I: Iterator<Item = &'a str>,
+                        F: Fn(&str) -> bool,
                     {
                         use chrono::{NaiveDateTime, DateTime, Utc};
                         let mut first_tag = None;
                         #(#field_initializers)*
 
-                        while let Some(field) = fields.peek().map(|x|*x)  {
+                        while let Some(field) = fields.peek().map(|x| *x) {
                             if field.is_empty() {
                                 fields.next();
                                 continue;
                             }
                             let mut parts = field.splitn(2, '=');
                             let tag = parts.next().unwrap();
-                            // Do not consume the iterator yet.
-                            println!("FIELD parts: {:?}={:?}",tag, parts.next().unwrap());
 
                             if first_tag.is_none() {
                                 first_tag = Some(tag);
                             } else if tag == first_tag.unwrap() {
+                                break;
+                            }
+
+                            if is_a_parent_tag(tag) {
                                 break;
                             }
 
@@ -126,6 +152,11 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             )*
                         })
                     }
+
+                    fn is_known_tag(tag: &str) -> bool {
+                        const KNOWN_TAGS: [&str; #known_tags_len] = [#(#known_tags_tokens),*];
+                        KNOWN_TAGS.binary_search(&tag).is_ok()
+                    }
                 }
             }
         }
@@ -142,10 +173,10 @@ fn parse_fix_attribute(attr: &Attribute) -> Option<(String, String)> {
         let mut ty = None;
         for nested_meta in meta_list.nested {
             if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                                                        ref path,
-                                                        lit: Lit::Str(ref lit_str),
-                                                        ..
-                                                    })) = nested_meta
+                ref path,
+                lit: Lit::Str(ref lit_str),
+                ..
+            })) = nested_meta
             {
                 if path.is_ident("tag") {
                     tag = Some(lit_str.value());
@@ -165,10 +196,10 @@ fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
     if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
         for nested_meta in meta_list.nested {
             if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                                                        ref path,
-                                                        lit: Lit::Str(ref lit_str),
-                                                        ..
-                                                    })) = nested_meta
+                ref path,
+                lit: Lit::Str(ref lit_str),
+                ..
+            })) = nested_meta
             {
                 if path.is_ident("tag") {
                     return Some(lit_str.value());
@@ -181,16 +212,22 @@ fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
 
 fn generate_field_parser(
     field_name: &Ident,
-    field_type: &Type,
+    _field_type: &Type,
     fix_type: &str,
     tag: String,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
     let parse_value = match fix_type {
         "String" => quote! { value.to_string() },
-        "u8" => quote! { value.parse::<u8>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? },
-        "u32" => quote! { value.parse::<u32>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? },
-        "f64" => quote! { value.parse::<f64>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? },
+        "u8" => {
+            quote! { value.parse::<u8>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
+        }
+        "u32" => {
+            quote! { value.parse::<u32>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
+        }
+        "f64" => {
+            quote! { value.parse::<f64>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
+        }
         "UTC_TIMESTAMP" => quote! {
             {let dt = NaiveDateTime::parse_from_str(value, "%Y%m%d-%H:%M:%S%.f")?;
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
@@ -231,7 +268,8 @@ fn generate_group_parser(
     let field_var = format_ident!("{}_tmp", field_name);
 
     // Extract inner type from Vec<T>
-    let inner_type = extract_inner_type(field_type, "Vec").expect("Expected Vec<T> for repeating group");
+    let inner_type =
+        extract_inner_type(field_type, "Vec").expect("Expected Vec<T> for repeating group");
 
     quote! {
         #tag => {
@@ -241,8 +279,8 @@ fn generate_group_parser(
             let value = parts.next().unwrap();
             let group_count = value.parse::<usize>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))?;
             let mut entries = Vec::with_capacity(group_count);
-            for i in 0..group_count {
-                let entry = <#inner_type as ::fix::FixDeserialize>::from_fix_message_iter(fields)?;
+            for _ in 0..group_count {
+                let entry = <#inner_type as ::fix::FixDeserialize>::from_fix_message_iter(fields, |x| Self::is_known_tag(x))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);

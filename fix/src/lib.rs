@@ -20,7 +20,12 @@ pub enum FixError {
 pub trait FixDeserialize: Sized {
     fn from_fix_message(fix_message: &[u8]) -> Result<Self, FixError>;
 
-    fn from_fix_message_iter<'a, I>(fields: &mut Peekable<I>) -> Result<Self, FixError>
-        where
-            I: Iterator<Item = &'a str>;
+    fn from_fix_message_iter<'a, I, F>(
+        fields: &mut Peekable<I>,
+        is_known_tag: F,
+    ) -> Result<Self, FixError>
+    where
+        I: Iterator<Item = &'a str>,
+        F: Fn(&str) -> bool;
+    fn is_known_tag(tag: &str) -> bool;
 }
