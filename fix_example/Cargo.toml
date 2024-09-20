@@ -1,0 +1,12 @@
+[package]
+name = "fix_example"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+version.workspace = true
+
+[dependencies]
+chrono =  { workspace = true }
+fix = { path = "../fix" }
+fix_derive = { path = "../fix_derive" }

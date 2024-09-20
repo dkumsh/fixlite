@@ -1,0 +1,16 @@
+[package]
+name = "fix_derive"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = {  version = "1.0.109", features = ["derive"] }
+fix = { path = "../fix" }

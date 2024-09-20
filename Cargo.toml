@@ -1,0 +1,15 @@
+[workspace.package]
+authors = []
+description = "FIX parser"
+edition = "2021"
+keywords = ["fix"]
+version = "0.0.0"
+
+[workspace]
+resolver = "2"
+
+members = ["fix", "fix_derive", "fix_example"]
+
+[workspace.dependencies]
+chrono = "0.4"
+
