@@ -1,6 +1,7 @@
 // src/main.rs
 
 use chrono::{DateTime, Utc};
+use fix::fix::MDEntryType;
 use fix::FixDeserialize;
 use fix_derive::FixDeserialize;
 
@@ -35,7 +36,7 @@ struct MarketDataMessage {
 #[derive(FixDeserialize, Debug)]
 struct MDEntry {
     #[fix(tag = "269", type = "u8")]
-    pub md_entry_type: u8,
+    pub md_entry_type: MDEntryType,
     #[fix(tag = "270", type = "f64")]
     pub md_entry_px: f64,
     #[fix(tag = "271", type = "f64")]
@@ -49,6 +50,6 @@ fn main() {
 231=10.0|100087=26105623|100090=59806.74|746=843249447.0|100092=0.0|100093=0.00066246|262=1|268=2|\
 269=0|270=59765.5|271=1.0|272=20240918-12:11:46.529|269=1|270=150000.0|271=1810000.0|272=20240918-12:11:46.529|10=163|";
 
-    let parsed: MarketDataMessage = MarketDataMessage::from_fix_message(fix_message).unwrap();
+    let parsed: MarketDataMessage = MarketDataMessage::from_fix_message(fix_message, Some('|')).unwrap();
     println!("{:#?}", parsed);
 }

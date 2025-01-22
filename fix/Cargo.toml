@@ -5,4 +5,7 @@ edition.workspace = true
 
 [dependencies]
 chrono = { workspace = true }
-thiserror = "1.0"
+thiserror = { workspace = true }
+once_cell = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

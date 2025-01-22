@@ -1,12 +1,12 @@
-// fix_deserialize_derive/src/lib.rs
-
 extern crate proc_macro;
 
+use fix::fix::tag::{extract_inner_type, get_registry_instance};
+use fix::type_check::{is_str_ref, IsTypeCompatible};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, Lit, Meta, MetaNameValue,
-    NestedMeta, Type,
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, Ident, Lifetime, Lit,
+    Meta, MetaNameValue, NestedMeta, Type,
 };
 
 #[proc_macro_derive(FixDeserialize, attributes(fix, fix_group))]
@@ -16,6 +16,28 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
     // Get the struct name.
     let struct_name = input.ident;
+
+    let generics = input.generics.clone();
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let mut impl_generics_new = generics.clone();
+    let fix_lifetime: Lifetime = parse_quote!('fix);
+    let fix_lifetime_def = syn::GenericParam::Lifetime(syn::LifetimeDef::new(fix_lifetime.clone()));
+    impl_generics_new.params.insert(0, fix_lifetime_def);
+    let mut where_clause_new = impl_generics_new.where_clause.clone();
+    if where_clause_new.is_none() {
+        where_clause_new = Some(parse_quote!(where))
+    }
+    if let Some(ref mut where_clause_new) = where_clause_new {
+        // For each struct lifetime 'a, add a where clause: 'fix: 'a
+        for lt in generics.lifetimes() {
+            let lt_ident = &lt.lifetime;
+            let predicate: syn::WherePredicate = parse_quote!('fix: #lt_ident);
+            where_clause_new.predicates.push(predicate);
+        }
+    }
+    impl_generics_new.where_clause = where_clause_new;
+    let (impl_generics_new, _, where_clause_new) = impl_generics_new.split_for_impl();
+    let fix_lifetime: proc_macro2::TokenStream = quote!('fix);
 
     // Generate code based on the struct's data.
     let expanded = match input.data {
@@ -36,13 +58,11 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                     let mut is_group = false;
                     let mut tag_value = None;
-                    let mut type_value = None;
 
                     for attr in &field.attrs {
                         if attr.path.is_ident("fix") {
-                            let (tag, ty) = parse_fix_attribute(attr).unwrap();
+                            let tag = parse_fix_attribute(attr).unwrap();
                             tag_value = Some(tag.clone());
-                            type_value = Some(ty);
                             known_tags.push(tag); // Collect known tags
                         } else if attr.path.is_ident("fix_group") {
                             let tag = parse_fix_group_attribute(attr).unwrap();
@@ -69,16 +89,18 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     if let Some(tag) = tag_value {
                         if is_group {
                             // Generate code for repeating group parsing.
-                            let group_parser = generate_group_parser(field_name, field_type, tag);
+                            let group_parser =
+                                generate_group_parser(field_name, field_type, tag, &fix_lifetime);
                             field_parsers.push(group_parser);
                         } else {
+                            if let Err(e) = get_registry_instance()
+                                .validate_field_type(tag.clone().as_str(), field_type)
+                            {
+                                return e.to_compile_error().into();
+                            }
+
                             // Generate code for regular field parsing.
-                            let parser = generate_field_parser(
-                                field_name,
-                                field_type,
-                                &type_value.unwrap(),
-                                tag,
-                            );
+                            let parser = generate_field_parser(field_name, field_type, tag);
                             field_parsers.push(parser);
                         }
 
@@ -97,20 +119,14 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
             // Combine all parts into the final implementation.
             quote! {
-                impl #fix_module_path::FixDeserialize for #struct_name {
-                    fn from_fix_message(fix_message: &[u8]) -> Result<Self, #fix_module_path::FixError> {
-                        let fix_message_str = std::str::from_utf8(fix_message)?;
-                        let mut fields = fix_message_str.split('|').peekable();
+                impl #impl_generics_new #fix_module_path::FixDeserialize<#fix_lifetime> for #struct_name #ty_generics #where_clause_new {
 
-                        Self::from_fix_message_iter(&mut fields, |_|false)
-                    }
-
-                    fn from_fix_message_iter<'a, I, F>(
+                    fn from_fix_message_inner<I, F>(
                         fields: &mut std::iter::Peekable<I>,
-                        is_a_parent_tag: F,
+                        is_a_top_level_tag: F,
                     ) -> Result<Self, #fix_module_path::FixError>
                     where
-                        I: Iterator<Item = &'a str>,
+                        I: Iterator<Item = &#fix_lifetime str>,
                         F: Fn(&str) -> bool,
                     {
                         use chrono::{NaiveDateTime, DateTime, Utc};
@@ -125,13 +141,30 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             let mut parts = field.splitn(2, '=');
                             let tag = parts.next().unwrap();
 
+                            // The following 2 checks aim to heuristically detect the boundaries
+                            // of elements within a repeating group, as well as the end of the group.
+
+                            // 1. Check for the beginning of an element. This approach is based on
+                            // the assumption that all elements of the same repeating group start from
+                            // the same tag. We expect this assumption to be reasonable.
                             if first_tag.is_none() {
                                 first_tag = Some(tag);
                             } else if tag == first_tag.unwrap() {
+                                // `first_tag` is expected to be the first tag in the repeating group.
+                                // If encountered again, it marks the start of the next element of the group,
+                                // so we stop processing the current element.
+                                // If this is a top-level tag, i.e., it is not part of a repeating group,
+                                // this logic does not matter as we do not expect any tag to appear
+                                // more than once outside a repeating group.
                                 break;
                             }
 
-                            if is_a_parent_tag(tag) {
+                            // 2. Check for the end of the group. We assume that if
+                            // while processing elements of a repeating group, we encounter a tag
+                            // which does not belong to the element but is one of the top-level
+                            // tags, this signals, that we are likely past the last element of the
+                            // group, so we need to stop processing the current element.
+                            if is_a_top_level_tag(tag) {
                                 break;
                             }
 
@@ -167,39 +200,33 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn parse_fix_attribute(attr: &Attribute) -> Option<(String, String)> {
+fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
+    let mut tag = None;
     if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
-        let mut tag = None;
-        let mut ty = None;
         for nested_meta in meta_list.nested {
             if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                ref path,
-                lit: Lit::Str(ref lit_str),
-                ..
-            })) = nested_meta
+                                                        ref path,
+                                                        lit: Lit::Str(ref lit_str),
+                                                        ..
+                                                    })) = nested_meta
             {
                 if path.is_ident("tag") {
                     tag = Some(lit_str.value());
-                } else if path.is_ident("type") {
-                    ty = Some(lit_str.value());
                 }
             }
         }
-        if tag.is_some() && ty.is_some() {
-            return Some((tag.unwrap(), ty.unwrap()));
-        }
     }
-    None
+    tag
 }
 
 fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
     if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
         for nested_meta in meta_list.nested {
             if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                ref path,
-                lit: Lit::Str(ref lit_str),
-                ..
-            })) = nested_meta
+                                                        ref path,
+                                                        lit: Lit::Str(ref lit_str),
+                                                        ..
+                                                    })) = nested_meta
             {
                 if path.is_ident("tag") {
                     return Some(lit_str.value());
@@ -212,27 +239,29 @@ fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
 
 fn generate_field_parser(
     field_name: &Ident,
-    _field_type: &Type,
-    fix_type: &str,
+    field_type: &Type,
     tag: String,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
-    let parse_value = match fix_type {
-        "String" => quote! { value.to_string() },
-        "u8" => {
-            quote! { value.parse::<u8>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
-        }
-        "u32" => {
-            quote! { value.parse::<u32>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
-        }
-        "f64" => {
-            quote! { value.parse::<f64>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))? }
-        }
-        "UTC_TIMESTAMP" => quote! {
+
+    // Determine the actual type to parse into
+    let parse_into_type = if let Some(inner_type) = extract_inner_type(field_type, "Option") {
+        inner_type
+    } else {
+        field_type
+    };
+
+    let parse_value = if is_str_ref(parse_into_type) {
+        quote! { value }
+    } else if "String".is_type_compatible(parse_into_type) {
+        quote! { value.to_string() }
+    } else if "DateTime<Utc>".is_type_compatible(parse_into_type) {
+        quote! {
             {let dt = NaiveDateTime::parse_from_str(value, "%Y%m%d-%H:%M:%S%.f")?;
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
-        },
-        _ => unimplemented!("Unsupported type"),
+        }
+    } else {
+        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fix::FixError::InvalidValue(#tag))? }
     };
 
     quote! {
@@ -245,25 +274,11 @@ fn generate_field_parser(
         },
     }
 }
-
-fn extract_inner_type<'a>(field_type: &'a Type, expected_outer: &str) -> Option<&'a Type> {
-    if let Type::Path(type_path) = field_type {
-        if let Some(segment) = type_path.path.segments.first() {
-            if segment.ident == expected_outer {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        return Some(inner_type);
-                    }
-                }
-            }
-        }
-    }
-    None
-}
 fn generate_group_parser(
     field_name: &Ident,
     field_type: &Type,
     tag: String,
+    fix_lifetime: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
@@ -277,10 +292,10 @@ fn generate_group_parser(
             let mut parts = field.splitn(2, '=');
             let tag = parts.next(); // Skip tag
             let value = parts.next().unwrap();
-            let group_count = value.parse::<usize>().map_err(|_| ::fix::FixError::InvalidValue(#tag.to_string()))?;
+            let group_count = value.parse::<usize>().map_err(|_| ::fix::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
-                let entry = <#inner_type as ::fix::FixDeserialize>::from_fix_message_iter(fields, |x| Self::is_known_tag(x))?;
+                let entry = <#inner_type as ::fix::FixDeserialize<#fix_lifetime>>::from_fix_message_inner(fields, |tag| Self::is_known_tag(tag))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);
