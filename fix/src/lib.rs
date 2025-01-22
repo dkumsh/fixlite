@@ -32,8 +32,8 @@ pub trait FixDeserialize<'fix>: Sized {
         fields: &mut Peekable<I>,
         is_a_parent_tag: F,
     ) -> Result<Self, FixError>
-        where
-            I: Iterator<Item = &'fix str>,
-            F: Fn(&str) -> bool;
+    where
+        I: Iterator<Item = &'fix str>,
+        F: Fn(&str) -> bool;
     fn is_known_tag(tag: &str) -> bool;
 }

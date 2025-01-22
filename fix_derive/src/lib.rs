@@ -5,8 +5,8 @@ use fix::type_check::{is_str_ref, IsTypeCompatible};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, Ident, Lifetime, Lit,
-    Meta, MetaNameValue, NestedMeta, Type,
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Ident,
+    Lifetime, Lit, Type, WherePredicate,
 };
 
 #[proc_macro_derive(FixDeserialize, attributes(fix, fix_group))]
@@ -21,17 +21,18 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     let (_, ty_generics, _) = generics.split_for_impl();
     let mut impl_generics_new = generics.clone();
     let fix_lifetime: Lifetime = parse_quote!('fix);
-    let fix_lifetime_def = syn::GenericParam::Lifetime(syn::LifetimeDef::new(fix_lifetime.clone()));
+    let fix_lifetime_def = GenericParam::Lifetime(parse_quote!(#fix_lifetime));
     impl_generics_new.params.insert(0, fix_lifetime_def);
+
     let mut where_clause_new = impl_generics_new.where_clause.clone();
     if where_clause_new.is_none() {
-        where_clause_new = Some(parse_quote!(where))
+        where_clause_new = Some(parse_quote!(where));
     }
     if let Some(ref mut where_clause_new) = where_clause_new {
         // For each struct lifetime 'a, add a where clause: 'fix: 'a
         for lt in generics.lifetimes() {
             let lt_ident = &lt.lifetime;
-            let predicate: syn::WherePredicate = parse_quote!('fix: #lt_ident);
+            let predicate: WherePredicate = parse_quote!('fix: #lt_ident);
             where_clause_new.predicates.push(predicate);
         }
     }
@@ -60,11 +61,11 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     let mut tag_value = None;
 
                     for attr in &field.attrs {
-                        if attr.path.is_ident("fix") {
+                        if attr.path().is_ident("fix") {
                             let tag = parse_fix_attribute(attr).unwrap();
                             tag_value = Some(tag.clone());
                             known_tags.push(tag); // Collect known tags
-                        } else if attr.path.is_ident("fix_group") {
+                        } else if attr.path().is_ident("fix_group") {
                             let tag = parse_fix_group_attribute(attr).unwrap();
                             tag_value = Some(tag.clone());
                             is_group = true;
@@ -141,12 +142,12 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             let mut parts = field.splitn(2, '=');
                             let tag = parts.next().unwrap();
 
-                            // The following 2 checks aim to heuristically detect the boundaries
-                            // of elements within a repeating group, as well as the end of the group.
-
-                            // 1. Check for the beginning of an element. This approach is based on
-                            // the assumption that all elements of the same repeating group start from
-                            // the same tag. We expect this assumption to be reasonable.
+                            // The following checks heuristically detect the boundaries of elements
+                            // within a repeating group and identify the end of the group.
+                            //
+                            // Check for the beginning of an element:
+                            // This approach assumes that all elements in a repeating group start
+                            // with the same tag. This assumption is generally reasonable.
                             if first_tag.is_none() {
                                 first_tag = Some(tag);
                             } else if tag == first_tag.unwrap() {
@@ -159,11 +160,12 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 break;
                             }
 
-                            // 2. Check for the end of the group. We assume that if
-                            // while processing elements of a repeating group, we encounter a tag
-                            // which does not belong to the element but is one of the top-level
-                            // tags, this signals, that we are likely past the last element of the
-                            // group, so we need to stop processing the current element.
+                            // Check for the end of the group:
+                            // We assume that if while processing elements of a repeating group,
+                            // we encounter a tag which does not belong to the element but is one
+                            // of the top-level tags, this signals, that we are likely past the
+                            // last element of the group, so we need to stop processing the current
+                            // element.
                             if is_a_top_level_tag(tag) {
                                 break;
                             }
@@ -202,41 +204,38 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
 fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
     let mut tag = None;
-    if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
-        for nested_meta in meta_list.nested {
-            if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                                                        ref path,
-                                                        lit: Lit::Str(ref lit_str),
-                                                        ..
-                                                    })) = nested_meta
-            {
-                if path.is_ident("tag") {
-                    tag = Some(lit_str.value());
-                }
+    let _ = attr
+        .parse_nested_meta(|nested| {
+            if nested.path.is_ident("tag") {
+                nested.value()?.parse::<Lit>().map(|lit| {
+                    if let Lit::Str(lit_str) = lit {
+                        tag = Some(lit_str.value());
+                    }
+                })
+            } else {
+                Ok(())
             }
-        }
-    }
+        })
+        .is_ok();
     tag
 }
-
 fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
-    if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
-        for nested_meta in meta_list.nested {
-            if let NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                                                        ref path,
-                                                        lit: Lit::Str(ref lit_str),
-                                                        ..
-                                                    })) = nested_meta
-            {
-                if path.is_ident("tag") {
-                    return Some(lit_str.value());
-                }
+    let mut tag = None;
+    let _ = attr
+        .parse_nested_meta(|nested| {
+            if nested.path.is_ident("tag") {
+                nested.value()?.parse::<Lit>().map(|lit| {
+                    if let Lit::Str(lit_str) = lit {
+                        tag = Some(lit_str.value());
+                    }
+                })
+            } else {
+                Ok(())
             }
-        }
-    }
-    None
+        })
+        .is_ok();
+    tag
 }
-
 fn generate_field_parser(
     field_name: &Ident,
     field_type: &Type,
@@ -274,6 +273,7 @@ fn generate_field_parser(
         },
     }
 }
+
 fn generate_group_parser(
     field_name: &Ident,
     field_type: &Type,
