@@ -1,5 +1,5 @@
 [package]
-name = "fix_example"
+name = "fixlite_example"
 authors.workspace = true
 description.workspace = true
 edition.workspace = true
@@ -8,5 +8,5 @@ version.workspace = true
 
 [dependencies]
 chrono =  { workspace = true }
-fix = { path = "../fix" }
-fix_derive = { path = "../fix_derive" }
+fixlite = { path = "../fixlite" }
+fixlite_derive = { path = "../fixlite_derive" }

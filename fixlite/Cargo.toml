@@ -1,5 +1,5 @@
 [package]
-name = "fix"
+name = "fixlite"
 version.workspace = true
 edition.workspace = true
 

@@ -1,9 +1,9 @@
 // src/main.rs
 
 use chrono::{DateTime, Utc};
-use fix::fix::MDEntryType;
-use fix::FixDeserialize;
-use fix_derive::FixDeserialize;
+use fixlite::fix::MDEntryType;
+use fixlite::FixDeserialize;
+use fixlite_derive::FixDeserialize;
 
 #[allow(dead_code)]
 #[derive(FixDeserialize, Debug)]

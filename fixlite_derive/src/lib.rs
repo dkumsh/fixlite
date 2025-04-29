@@ -1,7 +1,7 @@
 extern crate proc_macro;
 
-use fix::fix::tag::{extract_inner_type, get_registry_instance};
-use fix::type_check::{is_str_ref, IsTypeCompatible};
+use fixlite::fix::tag::{extract_inner_type, get_registry_instance};
+use fixlite::type_check::{is_str_ref, IsTypeCompatible};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -116,7 +116,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             let known_tags_len = known_tags.len();
             let known_tags_tokens = known_tags.iter().map(|tag| quote! { #tag });
 
-            let fix_module_path = quote!(::fix);
+            let fix_module_path = quote!(::fixlite);
 
             // Combine all parts into the final implementation.
             quote! {
@@ -260,7 +260,7 @@ fn generate_field_parser(
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
         }
     } else {
-        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fix::FixError::InvalidValue(#tag))? }
+        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))? }
     };
 
     quote! {
@@ -292,10 +292,10 @@ fn generate_group_parser(
             let mut parts = field.splitn(2, '=');
             let tag = parts.next(); // Skip tag
             let value = parts.next().unwrap();
-            let group_count = value.parse::<usize>().map_err(|_| ::fix::FixError::InvalidValue(#tag))?;
+            let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
-                let entry = <#inner_type as ::fix::FixDeserialize<#fix_lifetime>>::from_fix_message_inner(fields, |tag| Self::is_known_tag(tag))?;
+                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::from_fix_message_inner(fields, |tag| Self::is_known_tag(tag))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);
@@ -324,7 +324,7 @@ fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::T
         }
     } else {
         quote! {
-            let #field_name = #field_var.ok_or(::fix::FixError::MissingField(stringify!(#field_name)))?;
+            let #field_name = #field_var.ok_or(::fixlite::FixError::MissingField(stringify!(#field_name)))?;
         }
     }
 }

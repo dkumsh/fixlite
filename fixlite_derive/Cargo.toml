@@ -1,5 +1,5 @@
 [package]
-name = "fix_derive"
+name = "fixlite_derive"
 authors.workspace = true
 description.workspace = true
 edition.workspace = true
@@ -13,4 +13,4 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = { workspace = true }
 syn = { workspace = true }
-fix = { path = "../fix" }
+fixlite = { path = "../fixlite" }
