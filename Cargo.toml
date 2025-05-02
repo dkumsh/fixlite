@@ -5,7 +5,7 @@ license = "MIT"
 repository = "https://github.com/dkumsh/fixlite"
 edition = "2021"
 keywords = ["fix", "serialization"]
-version = "0.2.1"
+version = "0.2.2"
 
 [workspace]
 resolver = "2"
