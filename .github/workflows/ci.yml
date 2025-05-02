@@ -16,11 +16,11 @@ jobs:
       # 1. Checkout
       - uses: actions/checkout@v4
 
-      # 2. Install Rust
-      - uses: actions-rs/toolchain@v1
+      # 2. Install Rust + rustfmt & clippy
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          override: true
+          components: rustfmt, clippy
 
       # 3. Format, lint & test all workspace crates
       - name: fmt, clippy & tests
