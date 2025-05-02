@@ -13,17 +13,24 @@ jobs:
   test-and-dry-publish:
     runs-on: ubuntu-latest
     steps:
+      # 1. Checkout
       - uses: actions/checkout@v3
+
+      # 2. Install Rust
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
 
+      # 3. Format, lint & test all workspace crates
       - name: fmt, clippy & tests
         run: |
           cargo fmt -- --check
           cargo clippy -- -D warnings
           cargo test
 
-      - name: cargo publish (dry-run workspace)
-        run: cargo publish --dry-run --workspace
+      # 4. Simulate publishing each crate
+      - name: cargo publish (dry-run) for fixlite
+        run: cargo publish --dry-run -p fixlite
+      - name: cargo publish (dry-run) for fixlite_derive
+        run: cargo publish --dry-run -p fixlite_derive
