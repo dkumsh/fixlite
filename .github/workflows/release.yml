@@ -1,5 +1,9 @@
 name: 🚀 Release
 
+# Give the GITHUB_TOKEN write access to contents (tags & releases)
+permissions:
+  contents: write
+  
 on:
   push:
     tags:
