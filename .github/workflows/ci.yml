@@ -1,0 +1,34 @@
+name: CI
+
+# Run on every PR and push to main
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-dry-publish:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out your code
+      - uses: actions/checkout@v3
+
+      # 2. Install Rust
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      # 3. Formatting, linting, and tests
+      - name: fmt, clippy & tests
+        run: |
+          cargo fmt -- --check
+          cargo clippy -- -D warnings
+          cargo test
+
+      # 4. Simulate publish without uploading
+      - name: cargo publish (dry-run)
+        run: cargo publish --dry-run
