@@ -1,47 +1,58 @@
 name: 🚀 Release
 
-# Trigger only on semver tags like v1.2.3
 on:
+  # 1) Automatic release on semver tag push
   push:
     tags:
       - 'v*.*.*'
+  # 2) Manual dispatch via the Actions “Run workflow” button
+  workflow_dispatch: {}
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out code
+      # 1. Checkout
       - uses: actions/checkout@v3
 
-      # 2. Install stable Rust toolchain
+      # 2. Install Rust
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
 
-      # 3. Run tests, fmt & clippy
+      # 3. Format, lint & test all workspace crates
       - name: Test, format & lint
         run: |
           cargo fmt -- --check
           cargo clippy -- -D warnings
           cargo test
 
-      # 4. Publish to crates.io
-      - name: Publish to crates.io
+      # 4a. Real publish ─ only on tag pushes
+      - name: Publish workspace to crates.io
+        if: github.event_name == 'push'
         uses: actions-rs/cargo@v1
         with:
           command: publish
+          args: --workspace
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  github-release:
+      # 4b. Dry-run publish ─ only on manual dispatch
+      - name: Dry-run publish workspace
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo publish --dry-run --workspace
+
+  create-github-release:
     needs: build-and-publish
     runs-on: ubuntu-latest
     steps:
+      # Checkout again so softprops knows which tag to turn into a Release
       - uses: actions/checkout@v3
 
-      # Create a GitHub Release using the same tag
+      # Create the GitHub Release ─ only on tag pushes
       - name: Create GitHub Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
