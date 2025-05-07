@@ -56,6 +56,18 @@ macro_rules! pub_fix_enum {
                 }
             }
         }
+
+        impl From<$enum_name> for String {
+            fn from(e: $enum_name) -> String {
+                e.as_str().to_string()
+            }
+        }
+
+        impl std::fmt::Display for $enum_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
     };
 }
 
