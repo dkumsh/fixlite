@@ -107,10 +107,20 @@ impl DefaultRegistry {
             "263",
             vec![type_name::<fix::SubscriptionRequestType>()]
         );
+        tag_metadata!(
+            registry,
+            "205",
+            vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]
+        );
         tag_metadata!(registry, "265", vec![type_name::<fix::MDUpdateType>()]);
         tag_metadata!(registry, "269", vec![type_name::<fix::MDEntryType>()]);
         tag_metadata!(registry, "279", vec![type_name::<fix::MDUpdateAction>()]);
         tag_metadata!(registry, "281", vec![type_name::<fix::MDReqRejReason>()]);
+        tag_metadata!(
+            registry,
+            "314",
+            vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]
+        );
         tag_metadata!(
             registry,
             "321",

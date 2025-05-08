@@ -3,6 +3,8 @@
 pub mod tag;
 
 use crate::FixError;
+use std::convert::TryFrom;
+use std::num::ParseIntError;
 use std::str::FromStr;
 
 pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType, FixError> {
@@ -18,6 +20,55 @@ pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType
     }
     Err(FixError::MissingField("35[MsgType]"))
 }
+
+/// A calendar day‐of‐month in the range 1–31.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DayOfMonth(pub u8);
+
+/// Errors that can occur when parsing or validating a day‐of‐month.
+#[derive(Debug)]
+pub enum DayOfMonthError {
+    /// The string failed to parse as an integer.
+    Parse(ParseIntError),
+    /// The parsed number was not in the 1..=31 range.
+    OutOfRange,
+}
+
+// Allow `?` on `s.parse::<u8>()` to produce DayOfMonthError::Parse
+impl From<ParseIntError> for DayOfMonthError {
+    fn from(e: ParseIntError) -> Self {
+        DayOfMonthError::Parse(e)
+    }
+}
+
+impl TryFrom<u8> for DayOfMonth {
+    type Error = DayOfMonthError;
+
+    fn try_from(value: u8) -> Result<Self, DayOfMonthError> {
+        if (1..=31).contains(&value) {
+            Ok(DayOfMonth(value))
+        } else {
+            Err(DayOfMonthError::OutOfRange)
+        }
+    }
+}
+
+impl TryFrom<&str> for DayOfMonth {
+    type Error = DayOfMonthError;
+
+    fn try_from(s: &str) -> Result<Self, DayOfMonthError> {
+        // s.parse() can fail with ParseIntError → mapped via From<ParseIntError>
+        let v: u8 = s.parse()?;
+        DayOfMonth::try_from(v)
+    }
+}
+
+impl From<DayOfMonth> for u8 {
+    fn from(day: DayOfMonth) -> u8 {
+        day.0
+    }
+}
+
 /// macro pub_fix_enum!() for generating fix tag enum types:
 ///
 /// Usage example:
@@ -452,3 +503,62 @@ pub_fix_enum! {
         NonDataValueIncludesFieldDelimiter       = "17",
         Other                                     = "99",
 }}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryFrom;
+
+    #[test]
+    fn valid_u8_days() {
+        for d in 1u8..=31 {
+            let dom = DayOfMonth::try_from(d).unwrap();
+            assert_eq!(u8::from(dom), d);
+        }
+    }
+
+    #[test]
+    fn invalid_u8_days() {
+        assert!(DayOfMonth::try_from(0).is_err());
+        assert!(DayOfMonth::try_from(32).is_err());
+    }
+
+    #[test]
+    fn valid_str_days() {
+        let dom1 = DayOfMonth::try_from("1").unwrap();
+        assert_eq!(u8::from(dom1), 1);
+        let dom31 = DayOfMonth::try_from("31").unwrap();
+        assert_eq!(u8::from(dom31), 31);
+    }
+
+    #[test]
+    fn invalid_str_days_out_of_range() {
+        match DayOfMonth::try_from("0") {
+            Err(DayOfMonthError::OutOfRange) => (),
+            other => panic!("Expected OutOfRange, got {:?}", other),
+        }
+        match DayOfMonth::try_from("32") {
+            Err(DayOfMonthError::OutOfRange) => (),
+            other => panic!("Expected OutOfRange, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn invalid_str_days_non_numeric() {
+        assert!(matches!(
+            DayOfMonth::try_from("foo"),
+            Err(DayOfMonthError::Parse(_))
+        ));
+        assert!(matches!(
+            DayOfMonth::try_from(""),
+            Err(DayOfMonthError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn into_u8_conversion() {
+        let dom = DayOfMonth::try_from(15).unwrap();
+        let raw: u8 = dom.into();
+        assert_eq!(raw, 15);
+    }
+}
