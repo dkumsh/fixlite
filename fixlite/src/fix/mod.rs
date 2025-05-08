@@ -78,8 +78,29 @@ pub_fix_enum! {
         Cancel  = "1",
         Correct = "2",
         Status  = "3",
-    }
-}
+}}
+pub_fix_enum! {
+    SecurityIDSource("22") {
+        CUSIP                          = "1",
+        SEDOL                          = "2",
+        QUIK                           = "3",
+        ISIN                           = "4",
+        RIC                            = "5",
+        ISOCurrencyCode                = "6",
+        ISOCountryCode                 = "7",
+        ExchangeSymbol                 = "8",
+        CTASymbol                      = "9",
+        BloombergSymbol                = "A",
+        Wertpapier                     = "B",
+        Dutch                          = "C",
+        Valoren                        = "D",
+        Sicovam                        = "E",
+        Belgian                        = "F",
+        Common                         = "G",
+        ClearingHouse                  = "H",
+        ISDAFpMLProductSpecification   = "I",
+        OPRA                           = "J",
+}}
 pub_fix_enum! {
     MsgType("35"){
         Heartbeat = "0",
@@ -157,8 +178,24 @@ pub_fix_enum! {
         PendingNew      = "A",
         Calculated      = "B",
         Expired         = "C",
-    }
-}
+}}
+pub_fix_enum! {
+    OrdType("40") {
+        Market                       = "1",
+        Limit                        = "2",
+        Stop                         = "3",
+        StopLimit                    = "4",
+        WithOrWithout                = "6",
+        LimitOrBetter                = "7",
+        LimitWithOrWithout           = "8",
+        OnBasis                      = "9",
+        PreviouslyQuoted             = "D",
+        PreviouslyIndicated          = "E",
+        ForexSwap                    = "G",
+        Funari                       = "I",
+        MarketIfTouched              = "J",
+        MarketWithLeftoverAsLimit    = "K",
+}}
 pub_fix_enum! {
     Side("54"){
         Buy = "1",
@@ -197,8 +234,7 @@ pub_fix_enum! {
         TradeCorrect   = "G",
         TradeCancel    = "H",
         OrderStatus    = "I",
-    }
-}
+}}
 pub_fix_enum! {
     SubscriptionRequestType("263"){
         Snapshot = "0",
