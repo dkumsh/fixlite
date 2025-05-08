@@ -307,3 +307,25 @@ pub_fix_enum! {
         RejectSecurityProposal                    = "5",
         CannotMatchSelectionCriteria              = "6",
 }}
+pub_fix_enum! {
+    SessionRejectReason("373") {
+        InvalidTagNumber                         = "0",
+        RequiredTagMissing                       = "1",
+        TagNotDefinedForThisMessageType          = "2",
+        UndefinedTag                             = "3",
+        TagSpecifiedWithoutValue                 = "4",
+        ValueIsIncorrectForThisTag               = "5",
+        IncorrectDataFormatForValue              = "6",
+        DecryptionProblem                        = "7",
+        SignatureProblem                         = "8",
+        CompIDProblem                            = "9",
+        SendingTimeAccuracyProblem               = "10",
+        InvalidMsgType                           = "11",
+        XMLValidationError                       = "12",
+        TagAppearsMoreThanOnce                   = "13",
+        TagSpecifiedOutOfRequiredOrder           = "14",
+        RepeatingGroupFieldsOutOfOrder           = "15",
+        IncorrectNumInGroupCount                 = "16",
+        NonDataValueIncludesFieldDelimiter       = "17",
+        Other                                     = "99",
+}}

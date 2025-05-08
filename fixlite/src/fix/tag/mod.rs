@@ -117,6 +117,11 @@ impl DefaultRegistry {
             "323",
             vec![type_name::<fix::SecurityResponseType>()]
         );
+        tag_metadata!(
+            registry,
+            "373",
+            vec![type_name::<fix::SessionRejectReason>()]
+        );
 
         tag_metadata!(registry, "10", vec![type_name::<u8>()]);
         tag_metadata!(registry, "default", vec![]);
