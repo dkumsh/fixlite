@@ -79,14 +79,17 @@ impl DefaultRegistry {
         tag_metadata!(registry, "14", vec![type_name::<f64>()]);
         tag_metadata!(registry, "31", vec![type_name::<f64>()]);
         tag_metadata!(registry, "32", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "34", vec![type_name::<u32>()]);
+        tag_metadata!(registry, "34", vec![type_name::<u32>(), type_name::<i32>()]);
         tag_metadata!(registry, "38", vec![type_name::<f64>()]);
         tag_metadata!(registry, "44", vec![type_name::<f64>()]);
         tag_metadata!(registry, "52", vec![type_name::<DateTime<Utc>>()]);
         tag_metadata!(registry, "151", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "231", vec![type_name::<f64>()]);
         tag_metadata!(registry, "270", vec![type_name::<f64>()]);
         tag_metadata!(registry, "271", vec![type_name::<f64>()]);
         tag_metadata!(registry, "272", vec![type_name::<DateTime<Utc>>()]);
+        tag_metadata!(registry, "393", vec![type_name::<u32>()]);
+        tag_metadata!(registry, "1208", vec![type_name::<f64>()]);
 
         // Enums
         tag_metadata!(registry, "35", vec![type_name::<fix::MsgType>()]);
@@ -98,6 +101,7 @@ impl DefaultRegistry {
         tag_metadata!(registry, "54", vec![type_name::<fix::Side>()]);
         tag_metadata!(registry, "59", vec![type_name::<fix::TimeInForce>()]);
         tag_metadata!(registry, "150", vec![type_name::<fix::ExecType>()]);
+        tag_metadata!(registry, "167", vec![type_name::<fix::SecurityType>()]);
         tag_metadata!(
             registry,
             "263",

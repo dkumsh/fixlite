@@ -242,6 +242,129 @@ pub_fix_enum! {
         OrderStatus    = "I",
 }}
 pub_fix_enum! {
+    SecurityType("167") {
+        // Agency group
+        Agency                              = "AGENCY",
+        EuroSupranationalCoupons            = "EUSUPRA",
+        FederalAgencyCoupon                 = "FAC",
+        FederalAgencyDiscountNote           = "FADN",
+        PrivateExportFunding                = "PEF",
+        UsdSupranationalCoupons             = "SUPRA",
+
+        // Commodity group
+        Future                              = "FUT",
+        Option                              = "OPT",
+
+        // Corporate group
+        CorporateBond                       = "CORP",
+        CorporatePrivatePlacement           = "CPP",
+        ConvertibleBond                     = "CB",
+        DualCurrency                        = "DUAL",
+        EuroCorporateBond                   = "EUCORP",
+        IndexedLinked                       = "XLINKD",
+        StructuredNotes                     = "STRUCT",
+        YankeeCorporateBond                 = "YANK",
+
+        // Currency group
+        ForeignExchangeContract             = "FOR",
+
+        // Equity group
+        CommonStock                         = "CS",
+        PreferredStock                      = "PS",
+
+        // Government group
+        BradyBond                           = "BRADY",
+        EuroSovereigns                      = "EUSOV",
+        UsTreasuryBond                      = "TBOND",
+        InterestStrip                       = "TINT",
+        TreasuryInflationProtectedSecurities= "TIPS",
+        PrincipalStripCallable              = "TCAL",
+        PrincipalStripNonCallable           = "TPRN",
+        UsTreasuryNoteDeprecated            = "UST",
+        UsTreasuryBillDeprecated            = "USTB",
+        UsTreasuryNote                      = "TNOTE",
+        UsTreasuryBill                      = "TBILL",
+
+        // Financing group
+        Repurchase                          = "REPO",
+        Forward                             = "FORWARD",
+        BuySellback                         = "BUYSELL",
+        SecuritiesLoan                      = "SECLOAN",
+        SecuritiesPledge                    = "SECPLEDGE",
+
+        // Loan group
+        TermLoan                            = "TERM",
+        RevolverLoan                        = "RVLV",
+        RevolverTermLoan                    = "RVLVTRM",
+        BridgeLoan                          = "BRIDGE",
+        LetterOfCredit                      = "LOFC",
+        SwingLineFacility                   = "SWING",
+        DebtorInPossession                  = "DINP",
+        Defaulted                           = "DEFLTED",
+        Withdrawn                           = "WITHDRN",
+        Replaced                            = "REPLACD",
+        Matured                             = "MATURED",
+        AmendedAndRestated                  = "AMENDED",
+        Retired                             = "RETIRED",
+
+        // Money Market group
+        BankersAcceptance                   = "BA",
+        BankNotes                           = "BN",
+        BillOfExchanges                     = "BOX",
+        CertificateOfDeposit                = "CD",
+        CallLoans                           = "CL",
+        CommercialPaper                     = "CP",
+        DepositNotes                        = "DN",
+        EuroCertificateOfDeposit            = "EUCD",
+        EuroCommercialPaper                 = "EUCP",
+        LiquidityNote                       = "LQN",
+        MediumTermNotes                     = "MTN",
+        Overnight                           = "ONITE",
+        PromissoryNote                      = "PN",
+        PlazosFijos                         = "PZFJ",
+        ShortTermLoanNote                   = "STN",
+        TimeDeposit                         = "TD",
+        ExtendedCommNote                    = "XCN",
+        YankeeCertificateOfDeposit          = "YCD",
+
+        // Mortgage group
+        AssetBackedSecurities               = "ABS",
+        CorporateMortgageBackedSecurities   = "CMBS",
+        CollateralizedMortgageObligation    = "CMO",
+        IOETTEMortgage                      = "IET",
+        MortgageBackedSecurities            = "MBS",
+        MortgageInterestOnly                = "MIO",
+        MortgagePrincipalOnly               = "MPO",
+        MortgagePrivatePlacement            = "MPP",
+        MiscellaneousPassThrough            = "MPT",
+        Pfandbriefe                         = "PFAND",
+        ToBeAnnounced                       = "TBA",
+
+        // Municipal group
+        OtherAnticipationNotes              = "AN",
+        CertificateOfObligation             = "COFO",
+        CertificateOfParticipation          = "COFP",
+        GeneralObligationBonds              = "GO",
+        MandatoryTender                     = "MT",
+        RevenueAnticipationNote             = "RAN",
+        RevenueBonds                        = "REV",
+        SpecialAssessment                   = "SPCLA",
+        SpecialObligation                   = "SPCLO",
+        SpecialTax                          = "SPCLT",
+        TaxAnticipationNote                 = "TAN",
+        TaxAllocation                       = "TAXA",
+        TaxExemptCommercialPaper            = "TECP",
+        TaxRevenueAnticipationNote          = "TRAN",
+        VariableRateDemandNote              = "VRDN",
+        Warrant                             = "WAR",
+
+        // Other
+        MutualFund                          = "MF",
+        MultiLegInstrument                  = "MLEG",
+        NoSecurityType                      = "NONE",
+        Wildcard                            = "?",
+}}
+pub_fix_enum! {
     SubscriptionRequestType("263"){
         Snapshot = "0",
         Subscribe = "1",
