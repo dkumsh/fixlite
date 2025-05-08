@@ -103,8 +103,16 @@ impl DefaultRegistry {
         tag_metadata!(registry, "269", vec![type_name::<fix::MDEntryType>()]);
         tag_metadata!(registry, "279", vec![type_name::<fix::MDUpdateAction>()]);
         tag_metadata!(registry, "281", vec![type_name::<fix::MDReqRejReason>()]);
-        tag_metadata!(registry, "321", vec![type_name::<fix::SecurityRequestType>()]);
-        tag_metadata!(registry, "323", vec![type_name::<fix::SecurityResponseType>()]);
+        tag_metadata!(
+            registry,
+            "321",
+            vec![type_name::<fix::SecurityRequestType>()]
+        );
+        tag_metadata!(
+            registry,
+            "323",
+            vec![type_name::<fix::SecurityResponseType>()]
+        );
 
         tag_metadata!(registry, "10", vec![type_name::<u8>()]);
         tag_metadata!(registry, "default", vec![]);
