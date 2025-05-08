@@ -76,7 +76,11 @@ impl DefaultRegistry {
         let mut registry = HashMap::new();
         tag_metadata!(registry, "9", vec![type_name::<u32>()]);
         tag_metadata!(registry, "6", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "14", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "31", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "32", vec![type_name::<f64>()]);
         tag_metadata!(registry, "34", vec![type_name::<u32>()]);
+        tag_metadata!(registry, "38", vec![type_name::<f64>()]);
         tag_metadata!(registry, "44", vec![type_name::<f64>()]);
         tag_metadata!(registry, "52", vec![type_name::<DateTime<Utc>>()]);
         tag_metadata!(registry, "270", vec![type_name::<f64>()]);
