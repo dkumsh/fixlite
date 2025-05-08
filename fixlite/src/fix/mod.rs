@@ -73,6 +73,14 @@ macro_rules! pub_fix_enum {
 
 // FIX enum definitions
 pub_fix_enum! {
+    ExecTransType("20") {
+        New     = "0",
+        Cancel  = "1",
+        Correct = "2",
+        Status  = "3",
+    }
+}
+pub_fix_enum! {
     MsgType("35"){
         Heartbeat = "0",
         TestRequest = "1",
@@ -135,18 +143,62 @@ pub_fix_enum! {
         DerivativeSecurityListRequest = "z",
 }}
 pub_fix_enum! {
+    OrdStatus("39") {
+        New             = "0",
+        PartiallyFilled = "1",
+        Filled          = "2",
+        DoneForDay      = "3",
+        Canceled        = "4",
+        Replaced        = "5",
+        PendingCancel   = "6",
+        Stopped         = "7",
+        Rejected        = "8",
+        Suspended       = "9",
+        PendingNew      = "A",
+        Calculated      = "B",
+        Expired         = "C",
+    }
+}
+pub_fix_enum! {
     Side("54"){
         Buy = "1",
         Sell = "2",
 }}
 pub_fix_enum! {
-    MDEntryType("269"){
-        Bid = "0",
-        Offer = "1",
-        Trade = "2",
-        Index = "3",
-        Settlement = "6",
-}}
+    TimeInForce("59") {
+        Day               = "0",
+        GoodTillCancel    = "1",
+        AtTheOpening      = "2",
+        ImmediateOrCancel = "3",
+        FillOrKill        = "4",
+        GoodTillCrossing  = "5",
+        GoodTillDate      = "6",
+        AtTheClose        = "7",
+    }
+}
+pub_fix_enum! {
+    ExecType("150") {
+        New            = "0",
+        PartialFill    = "1",
+        Fill           = "2",
+        DoneForDay     = "3",
+        Canceled       = "4",
+        Replaced       = "5",
+        PendingCancel  = "6",
+        Stopped        = "7",
+        Rejected       = "8",
+        Suspended      = "9",
+        PendingNew     = "A",
+        Calculated     = "B",
+        Expired        = "C",
+        Restated       = "D",
+        PendingReplace = "E",
+        Trade          = "F",
+        TradeCorrect   = "G",
+        TradeCancel    = "H",
+        OrderStatus    = "I",
+    }
+}
 pub_fix_enum! {
     SubscriptionRequestType("263"){
         Snapshot = "0",
@@ -157,6 +209,22 @@ pub_fix_enum! {
     MDUpdateType ("265"){
         FullRefresh = "0",
         IncrementalRefresh = "1",
+}}
+pub_fix_enum! {
+    MDEntryType("269") {
+        Bid                         = "0",
+        Offer                       = "1",
+        Trade                       = "2",
+        IndexValue                  = "3",
+        OpeningPrice                = "4",
+        ClosingPrice                = "5",
+        SettlementPrice             = "6",
+        TradingSessionHighPrice     = "7",
+        TradingSessionLowPrice      = "8",
+        TradingSessionVWAPPrice     = "9",
+        Imbalance                   = "A",
+        TradeVolume                 = "B",
+        OpenInterest                = "C",
 }}
 pub_fix_enum! {
     MDUpdateAction("279"){
@@ -180,4 +248,20 @@ pub_fix_enum! {
         UnsupportedOpenCloseSettlFlag = "B",
         UnsupportedMDImplicitDelete = "C",
         Insufficientcredit = "D",
+}}
+pub_fix_enum! {
+    SecurityRequestType("321") {
+        RequestSecurityIdentityAndSpecifications       = "0",
+        RequestSecurityIdentityForProvidedSpecifications = "1",
+        RequestListSecurityTypes                        = "2",
+        RequestListSecurities                           = "3",
+}}
+pub_fix_enum! {
+    SecurityResponseType("323") {
+        AcceptSecurityProposalAsIs                = "1",
+        AcceptSecurityProposalWithRevisions       = "2",
+        ListOfSecurityTypesReturned               = "3", // FIX 4.2/4.3 only
+        ListOfSecuritiesReturned                  = "4", // FIX 4.2/4.3 only
+        RejectSecurityProposal                    = "5",
+        CannotMatchSelectionCriteria              = "6",
 }}
