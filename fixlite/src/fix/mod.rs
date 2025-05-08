@@ -80,6 +80,12 @@ pub_fix_enum! {
         Status  = "3",
 }}
 pub_fix_enum! {
+    HandlInst("21") {
+        Automated                           = "1",
+        AutomatedPublicBrokerInterventionOk = "2",
+        Manual                              = "3",
+}}
+pub_fix_enum! {
     SecurityIDSource("22") {
         CUSIP                          = "1",
         SEDOL                          = "2",
