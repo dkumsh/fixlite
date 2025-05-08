@@ -89,7 +89,11 @@ impl DefaultRegistry {
 
         // Enums
         tag_metadata!(registry, "35", vec![type_name::<fix::MsgType>()]);
+        tag_metadata!(registry, "20", vec![type_name::<fix::ExecTransType>()]);
+        tag_metadata!(registry, "39", vec![type_name::<fix::OrdStatus>()]);
         tag_metadata!(registry, "54", vec![type_name::<fix::Side>()]);
+        tag_metadata!(registry, "59", vec![type_name::<fix::TimeInForce>()]);
+        tag_metadata!(registry, "150", vec![type_name::<fix::ExecType>()]);
         tag_metadata!(
             registry,
             "263",
@@ -99,6 +103,9 @@ impl DefaultRegistry {
         tag_metadata!(registry, "269", vec![type_name::<fix::MDEntryType>()]);
         tag_metadata!(registry, "279", vec![type_name::<fix::MDUpdateAction>()]);
         tag_metadata!(registry, "281", vec![type_name::<fix::MDReqRejReason>()]);
+        tag_metadata!(registry, "321", vec![type_name::<fix::SecurityRequestType>()]);
+        tag_metadata!(registry, "323", vec![type_name::<fix::SecurityResponseType>()]);
+
         tag_metadata!(registry, "10", vec![type_name::<u8>()]);
         tag_metadata!(registry, "default", vec![]);
         Self { registry }
