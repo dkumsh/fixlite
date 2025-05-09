@@ -4,6 +4,7 @@ pub mod tag;
 
 use crate::FixError;
 use std::convert::TryFrom;
+use std::fmt;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
@@ -22,7 +23,7 @@ pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType
 }
 
 /// A calendar day‐of‐month in the range 1–31.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct DayOfMonth(pub u8);
 
 /// Errors that can occur when parsing or validating a day‐of‐month.
@@ -53,19 +54,33 @@ impl TryFrom<u8> for DayOfMonth {
     }
 }
 
-impl TryFrom<&str> for DayOfMonth {
-    type Error = DayOfMonthError;
-
-    fn try_from(s: &str) -> Result<Self, DayOfMonthError> {
-        // s.parse() can fail with ParseIntError → mapped via From<ParseIntError>
-        let v: u8 = s.parse()?;
-        DayOfMonth::try_from(v)
+impl FromStr for DayOfMonth {
+    type Err = DayOfMonthError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let day = s.parse::<u8>()?;
+        if day == 0 || day > 31 {
+            Err(DayOfMonthError::OutOfRange)
+        } else {
+            Ok(DayOfMonth(day))
+        }
     }
 }
 
 impl From<DayOfMonth> for u8 {
     fn from(day: DayOfMonth) -> u8 {
         day.0
+    }
+}
+
+impl fmt::Display for DayOfMonth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl fmt::Debug for DayOfMonth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
@@ -525,19 +540,19 @@ mod tests {
 
     #[test]
     fn valid_str_days() {
-        let dom1 = DayOfMonth::try_from("1").unwrap();
+        let dom1 = DayOfMonth::from_str("1").unwrap();
         assert_eq!(u8::from(dom1), 1);
-        let dom31 = DayOfMonth::try_from("31").unwrap();
+        let dom31 = DayOfMonth::from_str("31").unwrap();
         assert_eq!(u8::from(dom31), 31);
     }
 
     #[test]
     fn invalid_str_days_out_of_range() {
-        match DayOfMonth::try_from("0") {
+        match DayOfMonth::from_str("0") {
             Err(DayOfMonthError::OutOfRange) => (),
             other => panic!("Expected OutOfRange, got {:?}", other),
         }
-        match DayOfMonth::try_from("32") {
+        match DayOfMonth::from_str("32") {
             Err(DayOfMonthError::OutOfRange) => (),
             other => panic!("Expected OutOfRange, got {:?}", other),
         }
@@ -546,11 +561,11 @@ mod tests {
     #[test]
     fn invalid_str_days_non_numeric() {
         assert!(matches!(
-            DayOfMonth::try_from("foo"),
+            DayOfMonth::from_str("foo"),
             Err(DayOfMonthError::Parse(_))
         ));
         assert!(matches!(
-            DayOfMonth::try_from(""),
+            DayOfMonth::from_str(""),
             Err(DayOfMonthError::Parse(_))
         ));
     }

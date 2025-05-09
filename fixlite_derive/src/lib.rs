@@ -61,14 +61,13 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     let mut tag_value = None;
 
                     for attr in &field.attrs {
-                        if attr.path().is_ident("fix") {
+                        if attr.path().is_ident("fix") || attr.path().is_ident("fix_group") {
                             let tag = parse_fix_attribute(attr).unwrap();
                             tag_value = Some(tag.clone());
-                            known_tags.push(tag); // Collect known tags
-                        } else if attr.path().is_ident("fix_group") {
-                            let tag = parse_fix_group_attribute(attr).unwrap();
-                            tag_value = Some(tag.clone());
-                            is_group = true;
+                            // mark repeating-group fields when using #[fix_group]
+                            if attr.path().is_ident("fix_group") {
+                                is_group = true;
+                            }
                             known_tags.push(tag); // Collect known tags
                         }
                     }
@@ -207,9 +206,17 @@ fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
     let _ = attr
         .parse_nested_meta(|nested| {
             if nested.path.is_ident("tag") {
+                // Accept either a string literal or an integer literal
                 nested.value()?.parse::<Lit>().map(|lit| {
-                    if let Lit::Str(lit_str) = lit {
-                        tag = Some(lit_str.value());
+                    match lit {
+                        Lit::Str(lit_str) => {
+                            tag = Some(lit_str.value());
+                        }
+                        Lit::Int(lit_int) => {
+                            // e.g. 200 → "200"
+                            tag = Some(lit_int.base10_digits().to_string());
+                        }
+                        _ => { /* ignore other literal kinds */ }
                     }
                 })
             } else {
@@ -219,23 +226,7 @@ fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
         .is_ok();
     tag
 }
-fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
-    let mut tag = None;
-    let _ = attr
-        .parse_nested_meta(|nested| {
-            if nested.path.is_ident("tag") {
-                nested.value()?.parse::<Lit>().map(|lit| {
-                    if let Lit::Str(lit_str) = lit {
-                        tag = Some(lit_str.value());
-                    }
-                })
-            } else {
-                Ok(())
-            }
-        })
-        .is_ok();
-    tag
-}
+
 fn generate_field_parser(
     field_name: &Ident,
     field_type: &Type,
