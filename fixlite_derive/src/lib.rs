@@ -48,7 +48,8 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             let mut field_initializers = Vec::new();
             let mut field_names = Vec::new();
             let mut field_checks = Vec::new();
-            let mut known_tags = Vec::new(); // Collect known tags
+            let mut known_tags: Vec<String> = Vec::new(); // Collect known tags
+            let mut component_handlers = Vec::new();
 
             if let Fields::Named(ref fields_named) = data_struct.fields {
                 for field in &fields_named.named {
@@ -57,18 +58,32 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                     let field_type = &field.ty;
 
+                    let mut is_component = false;
                     let mut is_group = false;
                     let mut tag_value = None;
 
                     for attr in &field.attrs {
-                        if attr.path().is_ident("fix") || attr.path().is_ident("fix_group") {
-                            let tag = parse_fix_attribute(attr).unwrap();
-                            tag_value = Some(tag.clone());
-                            // mark repeating-group fields when using #[fix_group]
-                            if attr.path().is_ident("fix_group") {
-                                is_group = true;
+                        if attr.path().is_ident("fix") {
+                            // #[fix(...)]
+                            let (comp, tag_opt) = parse_fix_attribute(attr);
+                            is_component = comp;
+
+                            if let Some(tag) = tag_opt {
+                                tag_value = Some(tag.clone());
+
+                                // <-- put it into the constant list *unless* this field is a component
+                                if !is_component {
+                                    known_tags.push(tag);
+                                }
                             }
-                            known_tags.push(tag); // Collect known tags
+                        } else if attr.path().is_ident("fix_group") {
+                            // #[fix_group(tag = ...)]
+                            is_group = true;
+                            let (_, tag_opt) = parse_fix_attribute(attr);
+
+                            let tag = tag_opt.expect("group tag must be specified");
+                            tag_value = Some(tag.clone());
+                            known_tags.push(tag); // group-counter tags belong to the outer struct
                         }
                     }
 
@@ -86,12 +101,24 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         });
                     }
 
-                    if let Some(tag) = tag_value {
+                    /* ---------- decide what kind of parser to inject ---------- */
+                    if is_component {
+                        // component
+                        let handler =
+                            generate_component_parser(field_name, field_type, &fix_lifetime);
+                        component_handlers.push(handler);
+
+                        // ⬇ NEW: we still need the field-check!
+                        field_checks.push(generate_field_check(field_name, field_type));
+                    } else if let Some(tag) = tag_value {
+                        // regular field or repeating-group
                         if is_group {
-                            // Generate code for repeating group parsing.
-                            let group_parser =
-                                generate_group_parser(field_name, field_type, tag, &fix_lifetime);
-                            field_parsers.push(group_parser);
+                            field_parsers.push(generate_group_parser(
+                                field_name,
+                                field_type,
+                                tag,
+                                &fix_lifetime,
+                            ));
                         } else {
                             if let Err(e) = get_registry_instance()
                                 .validate_field_type(tag.clone().as_str(), field_type)
@@ -103,10 +130,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             let parser = generate_field_parser(field_name, field_type, tag);
                             field_parsers.push(parser);
                         }
-
-                        // Generate code for field presence check.
-                        let check = generate_field_check(field_name, field_type);
-                        field_checks.push(check);
+                        field_checks.push(generate_field_check(field_name, field_type));
                     }
                 }
             }
@@ -141,6 +165,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             let mut parts = field.splitn(2, '=');
                             let tag = parts.next().unwrap();
 
+                            // ---------- REPEATING GROUPS ----------
                             // The following checks heuristically detect the boundaries of elements
                             // within a repeating group and identify the end of the group.
                             //
@@ -168,6 +193,9 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             if is_a_top_level_tag(tag) {
                                 break;
                             }
+
+                            // ---------- COMPONENTS ----------
+                            #(#component_handlers)*         // <-- executes all generated `if … continue;` blocks
 
                             match tag {
                                 #(#field_parsers)*
@@ -201,30 +229,27 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
+/// Returns (is_component, tag_value)
+fn parse_fix_attribute(attr: &Attribute) -> (bool, Option<String>) {
     let mut tag = None;
+    let mut is_component = false;
+
     let _ = attr
         .parse_nested_meta(|nested| {
-            if nested.path.is_ident("tag") {
-                // Accept either a string literal or an integer literal
-                nested.value()?.parse::<Lit>().map(|lit| {
-                    match lit {
-                        Lit::Str(lit_str) => {
-                            tag = Some(lit_str.value());
-                        }
-                        Lit::Int(lit_int) => {
-                            // e.g. 200 → "200"
-                            tag = Some(lit_int.base10_digits().to_string());
-                        }
-                        _ => { /* ignore other literal kinds */ }
-                    }
-                })
-            } else {
-                Ok(())
+            if nested.path.is_ident("component") {
+                is_component = true;
+            } else if nested.path.is_ident("tag") {
+                nested.value()?.parse::<Lit>().map(|lit| match lit {
+                    Lit::Str(s) => tag = Some(s.value()),
+                    Lit::Int(i) => tag = Some(i.base10_digits().to_string()),
+                    _ => {}
+                })?;
             }
+            Ok(())
         })
         .is_ok();
-    tag
+
+    (is_component, tag)
 }
 
 fn generate_field_parser(
@@ -291,6 +316,26 @@ fn generate_group_parser(
             }
             #field_var = Some(entries);
         },
+    }
+}
+fn generate_component_parser(
+    field_name: &Ident,
+    field_type: &Type,
+    fix_lifetime: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    let field_var = format_ident!("{}_tmp", field_name);
+    let inner_type = extract_inner_type(field_type, "Option").unwrap_or(field_type);
+
+    quote! {
+        if #field_var.is_none()
+           && <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::is_known_tag(tag)
+        {
+            let value =
+                <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>
+                    ::from_fix_message_inner(fields, |t| Self::is_known_tag(t))?;
+            #field_var = Some(value);
+            continue;           // we already consumed the component’s fields
+        }
     }
 }
 

@@ -82,7 +82,7 @@ release ARG="patch":
 
     # 6. Commit, tag, and push
     git add Cargo.toml fixlite_derive/Cargo.toml
-    git commit -m "chore(release): v$new_version"
+    git commit -m "Release: v$new_version"
     git tag "v$new_version"
     git push origin --tags
 
