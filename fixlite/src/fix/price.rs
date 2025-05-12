@@ -43,13 +43,18 @@ impl<const W: u32, const F: u32> FixedPrice<W, F> {
 
     /// Construct from raw internal representation.
     pub fn from_raw(raw: i64) -> Self {
-        // Optionally: validate bounds? Here we just wrap.
         FixedPrice(raw)
     }
 
     /// Access the raw internal representation.
     pub fn raw(&self) -> i64 {
         self.0
+    }
+
+    /// Construct from f64, rounding to nearest fixed precision.
+    pub fn new(value: f64) -> Self {
+        let raw = (value * Self::SCALE as f64).round() as i64;
+        FixedPrice(raw)
     }
 
     /// Convert to f64
@@ -210,6 +215,13 @@ mod tests {
         let raw: i64 = 6220000000;
         let p = Price::from_raw(raw);
         assert_eq!(p.raw(), raw);
+        assert_eq!(p.to_string(), "62.2");
+    }
+
+    #[test]
+    fn test_new_from_f64() {
+        let p = Price::new(62.2);
+        assert_eq!(p.raw(), 6220000000);
         assert_eq!(p.to_string(), "62.2");
     }
 
