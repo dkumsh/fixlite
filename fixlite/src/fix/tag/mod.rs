@@ -79,7 +79,7 @@ impl DefaultRegistry {
         tag_metadata!(registry, "14", vec![type_name::<f64>()]);
         tag_metadata!(registry, "31", vec![type_name::<f64>()]);
         tag_metadata!(registry, "32", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "34", vec![type_name::<u32>(), type_name::<i32>()]);
+        tag_metadata!(registry, "34", vec![type_name::<u64>(), type_name::<i64>()]);
         tag_metadata!(registry, "38", vec![type_name::<f64>()]);
         tag_metadata!(registry, "44", vec![type_name::<f64>()]);
         tag_metadata!(registry, "52", vec![type_name::<DateTime<Utc>>()]);

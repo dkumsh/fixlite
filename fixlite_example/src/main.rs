@@ -18,7 +18,7 @@ struct MarketDataMessage<'a> {
     #[fix(tag = 56)]
     pub target_comp_id: &'a str,
     #[fix(tag = 34)]
-    pub msg_seq_num: u32,
+    pub msg_seq_num: u64,
     #[fix(tag = 52)]
     pub sending_time: DateTime<Utc>,
     #[fix(tag = 55)]
@@ -65,14 +65,14 @@ pub struct Container<'a> {
     #[fix(tag = 125)]
     pub b1: &'a str,
     #[fix(component)]
-    pub c: Option<Component<'a>>, // <- optional foo component
+    pub c: Option<Component<'a>>, // <- optional component
 }
 
 fn main() {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Component, MarketDataMessage};
+    use crate::{Container, MarketDataMessage};
     use fixlite::FixDeserialize;
 
     #[test]
@@ -87,8 +87,8 @@ mod tests {
     }
     #[test]
     fn component_test() {
-        let fix_message = b"8=FIX.4.4|9=31226|35=W|125=bar|123=a|124=b|10=100|";
-        let parsed: Component = Component::from_fix_message(fix_message, Some('|')).unwrap();
+        let fix_message = b"8=FIX.4.4|9=31226|35=W|125=bar|123=a1|124=a2|10=100|";
+        let parsed: Container = Container::from_fix_message(fix_message, Some('|')).unwrap();
         println!("{:#?}", parsed);
     }
 }
