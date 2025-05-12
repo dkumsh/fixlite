@@ -14,3 +14,4 @@ thiserror = { workspace = true }
 once_cell = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true }
+serde = { version = "1.0.219", features = ["derive"] }

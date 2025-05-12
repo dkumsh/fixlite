@@ -71,24 +71,32 @@ macro_rules! tag_metadata {
         );
     };
 }
+#[rustfmt::skip]
 impl DefaultRegistry {
     fn new() -> Self {
         let mut registry = HashMap::new();
         tag_metadata!(registry, "9", vec![type_name::<u32>()]);
-        tag_metadata!(registry, "6", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "6", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "14", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "31", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "31", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "32", vec![type_name::<f64>()]);
         tag_metadata!(registry, "34", vec![type_name::<u64>(), type_name::<i64>()]);
         tag_metadata!(registry, "38", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "44", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "44", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "52", vec![type_name::<DateTime<Utc>>()]);
+        tag_metadata!(registry, "99", vec![type_name::<f64>(), type_name::<fix::Price>()]);
+        tag_metadata!(registry, "132", vec![type_name::<f64>(), type_name::<fix::Price>()]);
+        tag_metadata!(registry, "133", vec![type_name::<f64>(), type_name::<fix::Price>()]);
+        tag_metadata!(registry, "140", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "151", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "202", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "231", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "270", vec![type_name::<f64>()]);
+        tag_metadata!(registry, "260", vec![type_name::<f64>(), type_name::<fix::Price>()]);
+        tag_metadata!(registry, "270", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "271", vec![type_name::<f64>()]);
         tag_metadata!(registry, "272", vec![type_name::<DateTime<Utc>>()]);
         tag_metadata!(registry, "393", vec![type_name::<u32>()]);
+        tag_metadata!(registry, "810", vec![type_name::<f64>(), type_name::<fix::Price>()]);
         tag_metadata!(registry, "1208", vec![type_name::<f64>()]);
 
         // Enums
@@ -102,40 +110,16 @@ impl DefaultRegistry {
         tag_metadata!(registry, "59", vec![type_name::<fix::TimeInForce>()]);
         tag_metadata!(registry, "150", vec![type_name::<fix::ExecType>()]);
         tag_metadata!(registry, "167", vec![type_name::<fix::SecurityType>()]);
-        tag_metadata!(
-            registry,
-            "263",
-            vec![type_name::<fix::SubscriptionRequestType>()]
-        );
-        tag_metadata!(
-            registry,
-            "205",
-            vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]
-        );
+        tag_metadata!(registry, "263", vec![type_name::<fix::SubscriptionRequestType>()]);
+        tag_metadata!(registry, "205", vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]);
         tag_metadata!(registry, "265", vec![type_name::<fix::MDUpdateType>()]);
         tag_metadata!(registry, "269", vec![type_name::<fix::MDEntryType>()]);
         tag_metadata!(registry, "279", vec![type_name::<fix::MDUpdateAction>()]);
         tag_metadata!(registry, "281", vec![type_name::<fix::MDReqRejReason>()]);
-        tag_metadata!(
-            registry,
-            "314",
-            vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]
-        );
-        tag_metadata!(
-            registry,
-            "321",
-            vec![type_name::<fix::SecurityRequestType>()]
-        );
-        tag_metadata!(
-            registry,
-            "323",
-            vec![type_name::<fix::SecurityResponseType>()]
-        );
-        tag_metadata!(
-            registry,
-            "373",
-            vec![type_name::<fix::SessionRejectReason>()]
-        );
+        tag_metadata!(registry, "314", vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]);
+        tag_metadata!(registry, "321", vec![type_name::<fix::SecurityRequestType>()]);
+        tag_metadata!(registry, "323", vec![type_name::<fix::SecurityResponseType>()]);
+        tag_metadata!(registry, "373", vec![type_name::<fix::SessionRejectReason>()]);
 
         tag_metadata!(registry, "10", vec![type_name::<u8>()]);
         tag_metadata!(registry, "default", vec![]);
