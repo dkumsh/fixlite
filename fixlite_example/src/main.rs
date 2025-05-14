@@ -98,6 +98,7 @@ mod tests {
         fix_tag_registry! {
             MyRegistry {
                 35   => [u32,MsgType],
+                31   => [f64], // LastPx
                 8001   => [f64],
             }
         }
@@ -111,6 +112,8 @@ mod tests {
             pub begin: &'a str,
             #[fix(tag = 35)]
             pub msg_type: MsgType,
+            #[fix(tag = 31)]
+            pub last_px: Option<f64>,
         }
 
         let fix_message = b"8=FIX.4.2|9=31226|35=W|8001=62.20|10=100|";
@@ -118,5 +121,6 @@ mod tests {
         assert_eq!(parsed.custom_price, 62.2); // 8001=62.20
         assert_eq!(parsed.begin, "FIX.4.2"); // 8=FIX.4.2
         assert_eq!(parsed.msg_type, MsgType::MarketDataSnapshotFullRefresh); // "35=W"
+        assert_eq!(parsed.last_px, None); // 31 is missing
     }
 }

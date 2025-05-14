@@ -43,7 +43,10 @@ macro_rules! fix_tag_registry {
         }
 
         // Explicit AllowedType impls
-        $( $( impl $crate::fix::tag::AllowedType<$tag, $type> for $registry_name {} )+ )*
+        $( $(
+            impl $crate::fix::tag::AllowedType<$tag, $type> for $registry_name {}
+            impl $crate::fix::tag::AllowedType<$tag, Option<$type>> for $registry_name {}
+        )+ )*
 
         // Blanket impls (only for undeclared tags)
         impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, String> for $registry_name {}
