@@ -12,24 +12,17 @@ pub trait AllowedType<const TAG: u32, T> {}
 
 #[macro_export]
 macro_rules! fix_tag_registry {
+    // Case 1: Normal case
     ($registry_name:ident { $( $tag:literal => [$($type:ty),+ $(,)?] ),* $(,)? } ) => {
         pub struct $registry_name;
 
         impl $crate::fix::tag::Registry for $registry_name {
             fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String> {
                 let parsed = tag.parse::<u32>();
-                eprintln!("MATCHING against: {}", parsed.clone().unwrap_or(0));
-                eprintln!("AVAILABLE TAGS: {:?}", vec![$($tag),*]);
-                eprintln!(">>> get_allowed_types_for_tag called with tag = {:?}, parsed = {:?}", tag, parsed);
-                let ret = match parsed.unwrap_or(0) {
+                match parsed.unwrap_or(0) {
                     $( $tag => vec![$(stringify!($type).to_string()),+], )*
-                    _ => {
-                        eprintln!(">>> get_allowed_types_for_tag case _");
-                        vec![]
-                    },
-                };
-                eprintln!(">>> get_allowed_types_for_tag ret:: {:?}", ret);
-                ret
+                    _ => vec![]
+                }
             }
 
             fn contains(&self, tag: &str) -> bool {
@@ -53,6 +46,10 @@ macro_rules! fix_tag_registry {
         impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, &str> for $registry_name {}
         impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<String>> for $registry_name {}
         impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<&str>> for $registry_name {}
+    };
+    // Case 2: Registry without braces
+    ($registry_name:ident) => {
+        $crate::fix_tag_registry!($registry_name {});
     };
 }
 
