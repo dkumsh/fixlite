@@ -1,208 +1,109 @@
 use crate::fix;
-use crate::type_check::IsTypeCompatible;
 use chrono::{DateTime, Utc};
-use once_cell::sync::Lazy;
-use quote::quote;
-use std::any::type_name;
-use std::collections::HashMap;
-use syn::spanned::Spanned;
-use syn::visit_mut::VisitMut;
-use syn::{Type, TypeReference};
 
-#[derive(Debug)]
-struct Metadata {
-    allowed_types: Vec<String>,
-}
-
+/// fix::tag::Registry is used to define mapping between FIX tags and their allowed Rust types
+/// DefaultRegistry is provided and users can also override it with their own definitions.
 pub trait Registry {
     fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String>;
     fn contains(&self, tag: &str) -> bool;
+}
 
-    fn validate_field_type(&self, tag: &str, field_type: &Type) -> Result<(), syn::Error> {
-        let allowed_types = self.get_allowed_types_for_tag(tag);
+pub trait AllowedType<const TAG: u32, T> {}
 
-        // Check if the field type matches with one of the allowed types
-        if allowed_types
-            .iter()
-            .any(|allowed_type| allowed_type.as_str().is_type_compatible(field_type))
-        {
-            return Ok(());
-        }
+#[macro_export]
+macro_rules! fix_tag_registry {
+    ($registry_name:ident { $( $tag:literal => [$($type:ty),+ $(,)?] ),* $(,)? } ) => {
+        pub struct $registry_name;
 
-        if let Some(option_inner_type) = extract_inner_type(field_type, "Option") {
-            // Check if the inner type T is allowed
-            if allowed_types
-                .iter()
-                .any(|allowed_type| allowed_type.as_str().is_type_compatible(option_inner_type))
-            {
-                return Ok(());
+        impl $crate::fix::tag::Registry for $registry_name {
+            fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String> {
+                let parsed = tag.parse::<u32>();
+                eprintln!("MATCHING against: {}", parsed.clone().unwrap_or(0));
+                eprintln!("AVAILABLE TAGS: {:?}", vec![$($tag),*]);
+                eprintln!(">>> get_allowed_types_for_tag called with tag = {:?}, parsed = {:?}", tag, parsed);
+                let ret = match parsed.unwrap_or(0) {
+                    $( $tag => vec![$(stringify!($type).to_string()),+], )*
+                    _ => {
+                        eprintln!(">>> get_allowed_types_for_tag case _");
+                        vec![]
+                    },
+                };
+                eprintln!(">>> get_allowed_types_for_tag ret:: {:?}", ret);
+                ret
             }
-        }
-        let error = syn::Error::new(
-            field_type.span(),
-            format!(
-                "Field type \"{}\" for tag {} does not match any allowed types: {:?}",
-                type_to_string_without_lifetimes(field_type),
-                tag,
-                allowed_types
-            ),
-        );
-        Err(error)
-    }
-}
 
-#[derive(Debug)]
-pub struct DefaultRegistry {
-    registry: HashMap<String, Metadata>,
-}
-
-macro_rules! tag_metadata {
-    ($registry:expr, $tag:expr, $types:expr) => {
-        // Always add "&str" and "String" to the allowed types
-        let mut all_types: Vec<String> = vec!["&str".to_string(), "String".to_string()];
-        let types: Vec<&str> = $types;
-        all_types.extend(types.into_iter().map(|s| s.to_string()));
-
-        $registry.insert(
-            $tag.into(),
-            Metadata {
-                allowed_types: all_types,
-            },
-        );
-    };
-}
-#[rustfmt::skip]
-impl DefaultRegistry {
-    fn new() -> Self {
-        let mut registry = HashMap::new();
-        tag_metadata!(registry, "9", vec![type_name::<u32>()]);
-        tag_metadata!(registry, "6", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "14", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "31", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "32", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "34", vec![type_name::<u64>(), type_name::<i64>()]);
-        tag_metadata!(registry, "38", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "44", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "52", vec![type_name::<DateTime<Utc>>()]);
-        tag_metadata!(registry, "99", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "132", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "133", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "140", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "151", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "202", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "231", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "260", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "270", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "271", vec![type_name::<f64>()]);
-        tag_metadata!(registry, "272", vec![type_name::<DateTime<Utc>>()]);
-        tag_metadata!(registry, "393", vec![type_name::<u32>()]);
-        tag_metadata!(registry, "810", vec![type_name::<f64>(), type_name::<fix::Price>()]);
-        tag_metadata!(registry, "1208", vec![type_name::<f64>()]);
-
-        // Enums
-        tag_metadata!(registry, "35", vec![type_name::<fix::MsgType>()]);
-        tag_metadata!(registry, "20", vec![type_name::<fix::ExecTransType>()]);
-        tag_metadata!(registry, "21", vec![type_name::<fix::HandlInst>()]);
-        tag_metadata!(registry, "22", vec![type_name::<fix::SecurityIDSource>()]);
-        tag_metadata!(registry, "39", vec![type_name::<fix::OrdStatus>()]);
-        tag_metadata!(registry, "40", vec![type_name::<fix::OrdType>()]);
-        tag_metadata!(registry, "54", vec![type_name::<fix::Side>()]);
-        tag_metadata!(registry, "59", vec![type_name::<fix::TimeInForce>()]);
-        tag_metadata!(registry, "150", vec![type_name::<fix::ExecType>()]);
-        tag_metadata!(registry, "167", vec![type_name::<fix::SecurityType>()]);
-        tag_metadata!(registry, "263", vec![type_name::<fix::SubscriptionRequestType>()]);
-        tag_metadata!(registry, "205", vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]);
-        tag_metadata!(registry, "265", vec![type_name::<fix::MDUpdateType>()]);
-        tag_metadata!(registry, "269", vec![type_name::<fix::MDEntryType>()]);
-        tag_metadata!(registry, "279", vec![type_name::<fix::MDUpdateAction>()]);
-        tag_metadata!(registry, "281", vec![type_name::<fix::MDReqRejReason>()]);
-        tag_metadata!(registry, "314", vec![type_name::<u8>(), type_name::<fix::DayOfMonth>()]);
-        tag_metadata!(registry, "321", vec![type_name::<fix::SecurityRequestType>()]);
-        tag_metadata!(registry, "323", vec![type_name::<fix::SecurityResponseType>()]);
-        tag_metadata!(registry, "373", vec![type_name::<fix::SessionRejectReason>()]);
-
-        tag_metadata!(registry, "10", vec![type_name::<u8>()]);
-        tag_metadata!(registry, "default", vec![]);
-        Self { registry }
-    }
-}
-impl Registry for DefaultRegistry {
-    fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String> {
-        self.registry.get(tag).map_or_else(
-            || self.registry.get("default").unwrap().allowed_types.clone(), // Return default types if tag not found
-            |metadata| metadata.allowed_types.clone(),
-        )
-    }
-    fn contains(&self, tag: &str) -> bool {
-        self.registry.contains_key(tag)
-    }
-}
-static REGISTRY: Lazy<DefaultRegistry> = Lazy::new(DefaultRegistry::new);
-pub fn get_registry_instance() -> &'static dyn Registry {
-    &*REGISTRY
-}
-struct RemoveLifetimes;
-impl VisitMut for RemoveLifetimes {
-    // Visit TypeReference to remove lifetimes from reference types (e.g. &'a T -> &T)
-    fn visit_type_reference_mut(&mut self, node: &mut TypeReference) {
-        node.lifetime = None;
-        syn::visit_mut::visit_type_reference_mut(self, node);
-    }
-}
-fn type_to_string_without_lifetimes(ty: &Type) -> String {
-    let mut ty = ty.clone();
-    RemoveLifetimes.visit_type_mut(&mut ty);
-    quote!(#ty).to_string().replace(' ', "")
-}
-
-/// Used to extract inner type T from  Option<T>, Vec<T>, etc.
-pub fn extract_inner_type<'a>(field_type: &'a Type, expected_outer: &str) -> Option<&'a Type> {
-    if let Type::Path(type_path) = field_type {
-        if let Some(segment) = type_path.path.segments.first() {
-            if segment.ident == expected_outer {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        return Some(inner_type);
-                    }
+            fn contains(&self, tag: &str) -> bool {
+                let tag_val = tag.parse::<u32>().unwrap_or(0);
+                #[allow(unreachable_code)]
+                {
+                    // Emit match expression only if tags are provided
+                    false $(|| tag_val == $tag)*
                 }
             }
         }
-    }
-    None
+
+        // Explicit AllowedType impls
+        $( $( impl $crate::fix::tag::AllowedType<$tag, $type> for $registry_name {} )+ )*
+
+        // Blanket impls (only for undeclared tags)
+        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, String> for $registry_name {}
+        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, &str> for $registry_name {}
+        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<String>> for $registry_name {}
+        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<&str>> for $registry_name {}
+    };
 }
 
-#[cfg(test)]
-mod test {
-    use crate::fix::tag::{get_registry_instance, type_to_string_without_lifetimes};
-    use syn::Type;
+// Default FIX tag registry defining mapping between fix tags and
+// corresponding allowed Rust types.
+fix_tag_registry! {
+    DefaultRegistry {
+        9   => [u32],                          // BodyLength
+        6   => [f64, fix::Price],              // AvgPx
+        14  => [f64],                          // CumQty
+        31  => [f64, fix::Price],              // LastPx
+        32  => [f64],                          // LastQty
+        34  => [u64, i64],                     // MsgSeqNum
+        38  => [f64],                          // OrderQty
+        44  => [f64, fix::Price],              // Price
+        52  => [DateTime<Utc>],                // SendingTime
+        99  => [f64, fix::Price],              // StopPx
+        132 => [f64, fix::Price],              // CashOrderQty
+        133 => [f64, fix::Price],              // OrderQty2
+        140 => [f64, fix::Price],              // PrevClosePx
+        151 => [f64],                          // LeavesQty
+        202 => [f64, fix::Price],              // StrikePrice
+        231 => [f64],                          // ContractMultiplier
+        260 => [f64, fix::Price],              // MDEntryPx
+        270 => [f64, fix::Price],              // MDEntryPx (again – used in market data)
+        271 => [f64],                          // MDEntrySize
+        272 => [DateTime<Utc>],                // MDEntryDate
+        393 => [u32],                          // TotNoRelatedSym
+        810 => [f64, fix::Price],              // PriceDelta
+        1208 => [f64],                         // TargetStrategyParameters
 
-    #[test]
-    fn test_type_to_string() {
-        let field_type: Type = syn::parse_str("&'a Option<&'b Vec<&'c str>>").unwrap();
-        assert_eq!(
-            "&Option<&Vec<&str>>",
-            type_to_string_without_lifetimes(&field_type)
-        );
-    }
-    #[test]
-    fn test_validate_field_type() {
-        let field_type: Type = syn::parse_str("String").unwrap();
-        get_registry_instance()
-            .validate_field_type("35", &field_type)
-            .unwrap();
-        let field_type: Type = syn::parse_str("&str").unwrap();
-        get_registry_instance()
-            .validate_field_type("35", &field_type)
-            .unwrap();
-        let field_type: Type = syn::parse_str("&'a str").unwrap();
-        get_registry_instance()
-            .validate_field_type("35", &field_type)
-            .unwrap();
-    }
+        // Enums
+        35  => [fix::MsgType],                 // MsgType
+        20  => [fix::ExecTransType],           // ExecTransType
+        21  => [fix::HandlInst],               // HandlInst
+        22  => [fix::SecurityIDSource],        // SecurityIDSource
+        39  => [fix::OrdStatus],               // OrdStatus
+        40  => [fix::OrdType],                 // OrdType
+        54  => [fix::Side],                    // Side
+        59  => [fix::TimeInForce],             // TimeInForce
+        150 => [fix::ExecType],                // ExecType
+        167 => [fix::SecurityType],            // SecurityType
+        263 => [fix::SubscriptionRequestType], // SubscriptionRequestType
+        205 => [u8, fix::DayOfMonth],          // MaturityDay
+        265 => [fix::MDUpdateType],            // MDUpdateType
+        269 => [fix::MDEntryType],             // MDEntryType
+        279 => [fix::MDUpdateAction],          // MDUpdateAction
+        281 => [fix::MDReqRejReason],          // MDReqRejReason
+        314 => [u8, fix::DayOfMonth],          // UnderlyingMaturityDay
+        321 => [fix::SecurityRequestType],     // SecurityRequestType
+        323 => [fix::SecurityResponseType],    // SecurityResponseType
+        373 => [fix::SessionRejectReason],     // SessionRejectReason
 
-    #[test]
-    fn test_tag_registry() {
-        assert!(get_registry_instance().contains("35"));
-        assert!(get_registry_instance().contains("54"));
+        // Checksum
+        10  => [u8],                           // CheckSum
     }
 }

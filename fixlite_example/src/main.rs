@@ -73,7 +73,9 @@ fn main() {}
 #[cfg(test)]
 mod tests {
     use crate::{Container, MarketDataMessage};
-    use fixlite::FixDeserialize;
+    use fixlite::fix::MsgType;
+    use fixlite::{fix_tag_registry, FixDeserialize};
+    use fixlite_derive::FixDeserialize;
 
     #[test]
     fn repeating_group_test() {
@@ -90,5 +92,31 @@ mod tests {
         let fix_message = b"8=FIX.4.4|9=31226|35=W|125=bar|123=a1|124=a2|10=100|";
         let parsed: Container = Container::from_fix_message(fix_message, Some('|')).unwrap();
         println!("{:#?}", parsed);
+    }
+    #[test]
+    fn test_custom_registry() {
+        fix_tag_registry! {
+            MyRegistry {
+                35   => [u32,MsgType],
+                8001   => [f64],
+            }
+        }
+
+        #[derive(FixDeserialize, Debug)]
+        #[fix_registry(MyRegistry)]
+        struct TestMessage<'a> {
+            #[fix(tag = 8001)]
+            pub custom_price: f64,
+            #[fix(tag = 8)]
+            pub begin: &'a str,
+            #[fix(tag = 35)]
+            pub msg_type: MsgType,
+        }
+
+        let fix_message = b"8=FIX.4.2|9=31226|35=W|8001=62.20|10=100|";
+        let parsed: TestMessage = TestMessage::from_fix_message(fix_message, Some('|')).unwrap();
+        assert_eq!(parsed.custom_price, 62.2); // 8001=62.20
+        assert_eq!(parsed.begin, "FIX.4.2"); // 8=FIX.4.2
+        assert_eq!(parsed.msg_type, MsgType::MarketDataSnapshotFullRefresh); // "35=W"
     }
 }

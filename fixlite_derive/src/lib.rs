@@ -1,6 +1,5 @@
 extern crate proc_macro;
 
-use fixlite::fix::tag::{extract_inner_type, get_registry_instance};
 use fixlite::type_check::{is_str_ref, IsTypeCompatible};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -9,10 +8,22 @@ use syn::{
     Lifetime, Lit, Type, WherePredicate,
 };
 
-#[proc_macro_derive(FixDeserialize, attributes(fix, fix_group))]
+#[proc_macro_derive(FixDeserialize, attributes(fix, fix_group, fix_registry))]
 pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
+    let registry_type = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("fix_registry"))
+        .map(|attr| {
+            let ident = attr.parse_args::<Ident>().unwrap();
+            quote! {#ident}
+        })
+        .unwrap_or_else(|| {
+            quote! {::fixlite::fix::tag::DefaultRegistry}
+        });
+    let mut assertions = Vec::new();
 
     // Get the struct name.
     let struct_name = input.ident;
@@ -20,7 +31,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     let generics = input.generics.clone();
     let (_, ty_generics, _) = generics.split_for_impl();
     let mut impl_generics_new = generics.clone();
-    let fix_lifetime: Lifetime = parse_quote!('fix);
+    let fix_lifetime: Lifetime = parse_quote!('fixlite);
     let fix_lifetime_def = GenericParam::Lifetime(parse_quote!(#fix_lifetime));
     impl_generics_new.params.insert(0, fix_lifetime_def);
 
@@ -29,19 +40,34 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         where_clause_new = Some(parse_quote!(where));
     }
     if let Some(ref mut where_clause_new) = where_clause_new {
-        // For each struct lifetime 'a, add a where clause: 'fix: 'a
+        // For each struct lifetime 'a, add a where clause: 'fixlite: 'a
         for lt in generics.lifetimes() {
             let lt_ident = &lt.lifetime;
-            let predicate: WherePredicate = parse_quote!('fix: #lt_ident);
+            let predicate: WherePredicate = parse_quote!('fixlite: #lt_ident);
             where_clause_new.predicates.push(predicate);
         }
     }
     impl_generics_new.where_clause = where_clause_new;
+    let user_lifetime_defs: Vec<_> = impl_generics_new
+        .lifetimes()
+        .skip(1)
+        .map(|lt| lt.lifetime.clone())
+        .collect();
+    assert!(
+        !user_lifetime_defs.contains(&fix_lifetime),
+        "The lifetime `'fixlite` is reserved by fixlite. Please rename it in your struct."
+    );
+
     let (impl_generics_new, _, where_clause_new) = impl_generics_new.split_for_impl();
-    let fix_lifetime: proc_macro2::TokenStream = quote!('fix);
+    let fix_lifetime: proc_macro2::TokenStream = quote!('fixlite);
+    let user_lifetime_tokens = if user_lifetime_defs.is_empty() {
+        quote!() // no lifetimes, omit <...>
+    } else {
+        quote! { <#(#user_lifetime_defs),*> }
+    };
 
     // Generate code based on the struct's data.
-    let expanded = match input.data {
+    let impl_block = match input.data {
         Data::Struct(ref data_struct) => {
             // Process the struct fields.
             let mut field_parsers = Vec::new();
@@ -73,7 +99,21 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                                 // <-- put it into the constant list *unless* this field is a component
                                 if !is_component {
-                                    known_tags.push(tag);
+                                    known_tags.push(tag.clone());
+                                }
+                                if let Ok(tag_u32) = tag.parse::<u32>() {
+                                    if let Some(inner_type) =
+                                        extract_inner_type(field_type, "Option")
+                                    {
+                                        assertions.push(quote! { assert_allowed::<Option<#inner_type>, #tag_u32>(); });
+                                        assertions.push(
+                                            quote! { assert_allowed::<#inner_type, #tag_u32>(); },
+                                        );
+                                    } else {
+                                        assertions.push(
+                                            quote! { assert_allowed::<#field_type, #tag_u32>(); },
+                                        );
+                                    }
                                 }
                             }
                         } else if attr.path().is_ident("fix_group") {
@@ -120,12 +160,6 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 &fix_lifetime,
                             ));
                         } else {
-                            if let Err(e) = get_registry_instance()
-                                .validate_field_type(tag.clone().as_str(), field_type)
-                            {
-                                return e.to_compile_error().into();
-                            }
-
                             // Generate code for regular field parsing.
                             let parser = generate_field_parser(field_name, field_type, tag);
                             field_parsers.push(parser);
@@ -224,9 +258,28 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         }
         _ => unimplemented!("FixDeserialize can only be derived for structs with named fields."),
     };
+    let const_assert_fn_name = format_ident!(
+        "_ASSERT_ALLOWED_TAG_TYPES_{}",
+        struct_name.to_string().to_uppercase()
+    );
+    let const_block = quote! {
+        const #const_assert_fn_name: () = {
+            const fn assert_allowed<T, const TAG: u32>()
+            where
+                #registry_type: ::fixlite::fix::tag::AllowedType<TAG,T>,
+            {}
+            fn __assertions #user_lifetime_tokens () {
+                #(#assertions)*
+            }
+            let _ = __assertions;
+        };
+    };
 
     // Convert the generated code into a TokenStream.
-    TokenStream::from(expanded)
+    TokenStream::from(quote! {
+        #impl_block
+        #const_block
+    })
 }
 
 /// Returns (is_component, tag_value)
@@ -363,4 +416,19 @@ fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::T
             let #field_name = #field_var.ok_or(::fixlite::FixError::MissingField(stringify!(#field_name)))?;
         }
     }
+}
+/// Used to extract inner type T from  Option<T>, Vec<T>, etc.
+fn extract_inner_type<'a>(field_type: &'a Type, expected_outer: &str) -> Option<&'a Type> {
+    if let Type::Path(type_path) = field_type {
+        if let Some(segment) = type_path.path.segments.first() {
+            if segment.ident == expected_outer {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                        return Some(inner_type);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
