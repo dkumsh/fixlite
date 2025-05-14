@@ -1,6 +1,5 @@
 extern crate proc_macro;
 
-use fixlite::fix::tag::{extract_inner_type, get_registry_instance};
 use fixlite::type_check::{is_str_ref, IsTypeCompatible};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -9,10 +8,22 @@ use syn::{
     Lifetime, Lit, Type, WherePredicate,
 };
 
-#[proc_macro_derive(FixDeserialize, attributes(fix, fix_group))]
+#[proc_macro_derive(FixDeserialize, attributes(fix, fix_group, fix_registry))]
 pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
+    let registry_type = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("fix_registry"))
+        .map(|attr| {
+            let ident = attr.parse_args::<Ident>().unwrap();
+            quote! {#ident}
+        })
+        .unwrap_or_else(|| {
+            quote! {::fixlite::fix::tag::DefaultRegistry}
+        });
+    let mut assertions = Vec::new();
 
     // Get the struct name.
     let struct_name = input.ident;
@@ -20,7 +31,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     let generics = input.generics.clone();
     let (_, ty_generics, _) = generics.split_for_impl();
     let mut impl_generics_new = generics.clone();
-    let fix_lifetime: Lifetime = parse_quote!('fix);
+    let fix_lifetime: Lifetime = parse_quote!('fixlite);
     let fix_lifetime_def = GenericParam::Lifetime(parse_quote!(#fix_lifetime));
     impl_generics_new.params.insert(0, fix_lifetime_def);
 
@@ -29,26 +40,42 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         where_clause_new = Some(parse_quote!(where));
     }
     if let Some(ref mut where_clause_new) = where_clause_new {
-        // For each struct lifetime 'a, add a where clause: 'fix: 'a
+        // For each struct lifetime 'a, add a where clause: 'fixlite: 'a
         for lt in generics.lifetimes() {
             let lt_ident = &lt.lifetime;
-            let predicate: WherePredicate = parse_quote!('fix: #lt_ident);
+            let predicate: WherePredicate = parse_quote!('fixlite: #lt_ident);
             where_clause_new.predicates.push(predicate);
         }
     }
     impl_generics_new.where_clause = where_clause_new;
+    let user_lifetime_defs: Vec<_> = impl_generics_new
+        .lifetimes()
+        .skip(1)
+        .map(|lt| lt.lifetime.clone())
+        .collect();
+    assert!(
+        !user_lifetime_defs.contains(&fix_lifetime),
+        "The lifetime `'fixlite` is reserved by fixlite. Please rename it in your struct."
+    );
+
     let (impl_generics_new, _, where_clause_new) = impl_generics_new.split_for_impl();
-    let fix_lifetime: proc_macro2::TokenStream = quote!('fix);
+    let fix_lifetime: proc_macro2::TokenStream = quote!('fixlite);
+    let user_lifetime_tokens = if user_lifetime_defs.is_empty() {
+        quote!() // no lifetimes, omit <...>
+    } else {
+        quote! { <#(#user_lifetime_defs),*> }
+    };
 
     // Generate code based on the struct's data.
-    let expanded = match input.data {
+    let impl_block = match input.data {
         Data::Struct(ref data_struct) => {
             // Process the struct fields.
             let mut field_parsers = Vec::new();
             let mut field_initializers = Vec::new();
             let mut field_names = Vec::new();
             let mut field_checks = Vec::new();
-            let mut known_tags = Vec::new(); // Collect known tags
+            let mut known_tags: Vec<String> = Vec::new(); // Collect known tags
+            let mut component_handlers = Vec::new();
 
             if let Fields::Named(ref fields_named) = data_struct.fields {
                 for field in &fields_named.named {
@@ -57,19 +84,46 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                     let field_type = &field.ty;
 
+                    let mut is_component = false;
                     let mut is_group = false;
                     let mut tag_value = None;
 
                     for attr in &field.attrs {
                         if attr.path().is_ident("fix") {
-                            let tag = parse_fix_attribute(attr).unwrap();
-                            tag_value = Some(tag.clone());
-                            known_tags.push(tag); // Collect known tags
+                            // #[fix(...)]
+                            let (comp, tag_opt) = parse_fix_attribute(attr);
+                            is_component = comp;
+
+                            if let Some(tag) = tag_opt {
+                                tag_value = Some(tag.clone());
+
+                                // <-- put it into the constant list *unless* this field is a component
+                                if !is_component {
+                                    known_tags.push(tag.clone());
+                                }
+                                if let Ok(tag_u32) = tag.parse::<u32>() {
+                                    if let Some(inner_type) =
+                                        extract_inner_type(field_type, "Option")
+                                    {
+                                        assertions.push(quote! { assert_allowed::<Option<#inner_type>, #tag_u32>(); });
+                                        assertions.push(
+                                            quote! { assert_allowed::<#inner_type, #tag_u32>(); },
+                                        );
+                                    } else {
+                                        assertions.push(
+                                            quote! { assert_allowed::<#field_type, #tag_u32>(); },
+                                        );
+                                    }
+                                }
+                            }
                         } else if attr.path().is_ident("fix_group") {
-                            let tag = parse_fix_group_attribute(attr).unwrap();
-                            tag_value = Some(tag.clone());
+                            // #[fix_group(tag = ...)]
                             is_group = true;
-                            known_tags.push(tag); // Collect known tags
+                            let (_, tag_opt) = parse_fix_attribute(attr);
+
+                            let tag = tag_opt.expect("group tag must be specified");
+                            tag_value = Some(tag.clone());
+                            known_tags.push(tag); // group-counter tags belong to the outer struct
                         }
                     }
 
@@ -87,27 +141,30 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         });
                     }
 
-                    if let Some(tag) = tag_value {
-                        if is_group {
-                            // Generate code for repeating group parsing.
-                            let group_parser =
-                                generate_group_parser(field_name, field_type, tag, &fix_lifetime);
-                            field_parsers.push(group_parser);
-                        } else {
-                            if let Err(e) = get_registry_instance()
-                                .validate_field_type(tag.clone().as_str(), field_type)
-                            {
-                                return e.to_compile_error().into();
-                            }
+                    /* ---------- decide what kind of parser to inject ---------- */
+                    if is_component {
+                        // component
+                        let handler =
+                            generate_component_parser(field_name, field_type, &fix_lifetime);
+                        component_handlers.push(handler);
 
+                        // ⬇ NEW: we still need the field-check!
+                        field_checks.push(generate_field_check(field_name, field_type));
+                    } else if let Some(tag) = tag_value {
+                        // regular field or repeating-group
+                        if is_group {
+                            field_parsers.push(generate_group_parser(
+                                field_name,
+                                field_type,
+                                tag,
+                                &fix_lifetime,
+                            ));
+                        } else {
                             // Generate code for regular field parsing.
                             let parser = generate_field_parser(field_name, field_type, tag);
                             field_parsers.push(parser);
                         }
-
-                        // Generate code for field presence check.
-                        let check = generate_field_check(field_name, field_type);
-                        field_checks.push(check);
+                        field_checks.push(generate_field_check(field_name, field_type));
                     }
                 }
             }
@@ -142,6 +199,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             let mut parts = field.splitn(2, '=');
                             let tag = parts.next().unwrap();
 
+                            // ---------- REPEATING GROUPS ----------
                             // The following checks heuristically detect the boundaries of elements
                             // within a repeating group and identify the end of the group.
                             //
@@ -170,6 +228,9 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 break;
                             }
 
+                            // ---------- COMPONENTS ----------
+                            #(#component_handlers)*         // <-- executes all generated `if … continue;` blocks
+
                             match tag {
                                 #(#field_parsers)*
                                 _ => {
@@ -197,45 +258,53 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         }
         _ => unimplemented!("FixDeserialize can only be derived for structs with named fields."),
     };
+    let const_assert_fn_name = format_ident!(
+        "_ASSERT_ALLOWED_TAG_TYPES_{}",
+        struct_name.to_string().to_uppercase()
+    );
+    let const_block = quote! {
+        const #const_assert_fn_name: () = {
+            const fn assert_allowed<T, const TAG: u32>()
+            where
+                #registry_type: ::fixlite::fix::tag::AllowedType<TAG,T>,
+            {}
+            fn __assertions #user_lifetime_tokens () {
+                #(#assertions)*
+            }
+            let _ = __assertions;
+        };
+    };
 
     // Convert the generated code into a TokenStream.
-    TokenStream::from(expanded)
+    TokenStream::from(quote! {
+        #impl_block
+        #const_block
+    })
 }
 
-fn parse_fix_attribute(attr: &Attribute) -> Option<String> {
+/// Returns (is_component, tag_value)
+fn parse_fix_attribute(attr: &Attribute) -> (bool, Option<String>) {
     let mut tag = None;
+    let mut is_component = false;
+
     let _ = attr
         .parse_nested_meta(|nested| {
-            if nested.path.is_ident("tag") {
-                nested.value()?.parse::<Lit>().map(|lit| {
-                    if let Lit::Str(lit_str) = lit {
-                        tag = Some(lit_str.value());
-                    }
-                })
-            } else {
-                Ok(())
+            if nested.path.is_ident("component") {
+                is_component = true;
+            } else if nested.path.is_ident("tag") {
+                nested.value()?.parse::<Lit>().map(|lit| match lit {
+                    Lit::Str(s) => tag = Some(s.value()),
+                    Lit::Int(i) => tag = Some(i.base10_digits().to_string()),
+                    _ => {}
+                })?;
             }
+            Ok(())
         })
         .is_ok();
-    tag
+
+    (is_component, tag)
 }
-fn parse_fix_group_attribute(attr: &Attribute) -> Option<String> {
-    let mut tag = None;
-    let _ = attr
-        .parse_nested_meta(|nested| {
-            if nested.path.is_ident("tag") {
-                nested.value()?.parse::<Lit>().map(|lit| {
-                    if let Lit::Str(lit_str) = lit {
-                        tag = Some(lit_str.value());
-                    }
-                })
-            } else {
-                Ok(())
-            }
-        })
-        .is_ok();
-    tag
-}
+
 fn generate_field_parser(
     field_name: &Ident,
     field_type: &Type,
@@ -302,6 +371,26 @@ fn generate_group_parser(
         },
     }
 }
+fn generate_component_parser(
+    field_name: &Ident,
+    field_type: &Type,
+    fix_lifetime: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    let field_var = format_ident!("{}_tmp", field_name);
+    let inner_type = extract_inner_type(field_type, "Option").unwrap_or(field_type);
+
+    quote! {
+        if #field_var.is_none()
+           && <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::is_known_tag(tag)
+        {
+            let value =
+                <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>
+                    ::from_fix_message_inner(fields, |t| Self::is_known_tag(t))?;
+            #field_var = Some(value);
+            continue;           // we already consumed the component’s fields
+        }
+    }
+}
 
 fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
@@ -327,4 +416,19 @@ fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::T
             let #field_name = #field_var.ok_or(::fixlite::FixError::MissingField(stringify!(#field_name)))?;
         }
     }
+}
+/// Used to extract inner type T from  Option<T>, Vec<T>, etc.
+fn extract_inner_type<'a>(field_type: &'a Type, expected_outer: &str) -> Option<&'a Type> {
+    if let Type::Path(type_path) = field_type {
+        if let Some(segment) = type_path.path.segments.first() {
+            if segment.ident == expected_outer {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                        return Some(inner_type);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
