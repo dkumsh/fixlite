@@ -283,8 +283,12 @@ pub_fix_enum! {
         GoodTillCrossing  = "5",
         GoodTillDate      = "6",
         AtTheClose        = "7",
-    }
-}
+}}
+pub_fix_enum! {
+    ResetSeqNumFlag("141"){
+        Yes = "Y",
+        No = "N",
+}}
 pub_fix_enum! {
     ExecType("150") {
         New            = "0",
