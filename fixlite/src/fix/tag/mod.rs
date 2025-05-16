@@ -70,7 +70,7 @@ fix_tag_registry! {
         132 => [f64, fix::Price],              // CashOrderQty
         133 => [f64, fix::Price],              // OrderQty2
         140 => [f64, fix::Price],              // PrevClosePx
-        141 => [u8, fix::Price],              // PrevClosePx
+        141 => [u8, fix::ResetSeqNumFlag],     // ResetSeqNumFlag
         151 => [f64],                          // LeavesQty
         202 => [f64, fix::Price],              // StrikePrice
         231 => [f64],                          // ContractMultiplier
