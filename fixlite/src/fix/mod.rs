@@ -100,7 +100,7 @@ macro_rules! pub_fix_enum {
             $($variant:ident = $str_val:literal),* $(,)?
         }
     ) => {
-        #[derive(Debug, PartialEq, Eq)]
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
         pub enum $enum_name {
             $($variant),*
         }
