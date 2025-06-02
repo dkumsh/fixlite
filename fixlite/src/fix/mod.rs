@@ -523,6 +523,12 @@ pub_fix_enum! {
         Other                                     = "99",
 }}
 
+pub_fix_enum! {
+    CxlRejResponseTo ("434") {
+        CancelRequest  = "1",
+        ReplaceRequest = "2",
+}}
+
 #[cfg(test)]
 mod tests {
     use super::*;
