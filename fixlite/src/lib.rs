@@ -19,21 +19,25 @@ pub enum FixError {
 }
 
 pub trait FixDeserialize<'fix>: Sized {
-    fn from_fix_message(
-        fix_message: &'fix [u8],
-        delimiter: Option<char>,
-    ) -> Result<Self, FixError> {
-        let delimiter = delimiter.unwrap_or('\x01');
+    fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let fix_message_str = std::str::from_utf8(fix_message)?;
-        let mut fields = fix_message_str.split(delimiter).peekable();
-        Self::from_fix_message_inner(&mut fields, |_| false)
+        let mut fields = fix_message_str.split('\x01').peekable();
+        Self::deserialize_fields(&mut fields, |_| false)
     }
-    fn from_fix_message_inner<I, F>(
+
+    fn from_fix_with_separator(fix_message: &'fix [u8], separator: char) -> Result<Self, FixError> {
+        let fix_message_str = std::str::from_utf8(fix_message)?;
+        let mut fields = fix_message_str.split(separator).peekable();
+        Self::deserialize_fields(&mut fields, |_| false)
+    }
+
+    fn deserialize_fields<I, F>(
         fields: &mut Peekable<I>,
         is_a_parent_tag: F,
     ) -> Result<Self, FixError>
     where
         I: Iterator<Item = &'fix str>,
         F: Fn(&str) -> bool;
+
     fn is_known_tag(tag: &str) -> bool;
 }

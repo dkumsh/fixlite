@@ -179,7 +179,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             quote! {
                 impl #impl_generics_new #fix_module_path::FixDeserialize<#fix_lifetime> for #struct_name #ty_generics #where_clause_new {
 
-                    fn from_fix_message_inner<I, F>(
+                    fn deserialize_fields<I, F>(
                         fields: &mut std::iter::Peekable<I>,
                         is_a_top_level_tag: F,
                     ) -> Result<Self, #fix_module_path::FixError>
@@ -364,7 +364,7 @@ fn generate_group_parser(
             let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
-                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::from_fix_message_inner(fields, |tag| Self::is_known_tag(tag))?;
+                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::deserialize_fields(fields, |tag| Self::is_known_tag(tag))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);
@@ -385,7 +385,7 @@ fn generate_component_parser(
         {
             let value =
                 <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>
-                    ::from_fix_message_inner(fields, |t| Self::is_known_tag(t))?;
+                    ::deserialize_fields(fields, |t| Self::is_known_tag(t))?;
             #field_var = Some(value);
             continue;           // we already consumed the component’s fields
         }

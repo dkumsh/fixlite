@@ -69,14 +69,11 @@ Given a FIX message:
 ``` 
 8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|
 ```
-You can deserialize it as follows:
+You can deserialize using from_fix() for SOH delimiter or for custom delimiters use from_fix_with_separator it as follows:
 
 ```rust
-let fix_message = "8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|";
-let fields: Vec<&str> = fix_message.split('|').collect();
-let mut iter = fields.iter().peekable();
-
-let message = TestMessage::from_fix_message_inner(&mut iter, |tag| TestMessage::is_known_tag(tag))?;
+let raw = b"8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|";
+let message = TestMessage::from_fix_with_separator(raw,'|')?;
 ```
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
