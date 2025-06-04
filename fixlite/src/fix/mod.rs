@@ -285,6 +285,11 @@ pub_fix_enum! {
         AtTheClose        = "7",
 }}
 pub_fix_enum! {
+    GapFillFlag("123"){
+        Yes = "Y",
+        No = "N",
+}}
+pub_fix_enum! {
     ResetSeqNumFlag("141"){
         Yes = "Y",
         No = "N",
