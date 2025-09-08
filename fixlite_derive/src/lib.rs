@@ -180,7 +180,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                 impl #impl_generics_new #fix_module_path::FixDeserialize<#fix_lifetime> for #struct_name #ty_generics #where_clause_new {
 
                     fn deserialize_fields<I, F>(
-                        fields: &mut std::iter::Peekable<I>,
+                        fields: &mut I,
                         is_a_top_level_tag: F,
                     ) -> Result<Self, #fix_module_path::FixError>
                     where
@@ -191,13 +191,10 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         let mut first_tag = None;
                         #(#field_initializers)*
 
-                        while let Some(field) = fields.peek().map(|x| *x) {
-                            if field.is_empty() {
-                                fields.next();
-                                continue;
+                        while let Some(tag) = fields.next() {
+                            if tag.is_empty() {
+                                break;
                             }
-                            let mut parts = field.splitn(2, '=');
-                            let tag = parts.next().unwrap();
                             let tag: u32 = tag.parse().unwrap();
 
                             // ---------- REPEATING GROUPS ----------
@@ -236,7 +233,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 #(#field_parsers)*
                                 _ => {
                                     // Unrecognized tag, consume and ignore.
-                                    fields.next();
+                                    fields.next().ok_or(::fixlite::FixError::InvalidValue(0))?;
                                 }
                             }
                         }
@@ -337,10 +334,7 @@ fn generate_field_parser(
 
     quote! {
         #tag => {
-            let field = fields.next().unwrap();
-            let mut parts = field.splitn(2, '=');
-            parts.next(); // Skip tag
-            let value = parts.next().unwrap();
+            let value = fields.next().unwrap();
             #field_var = Some(#parse_value);
         },
     }
@@ -362,11 +356,7 @@ fn generate_group_parser(
 
     quote! {
         #tag => {
-            let field = fields.next().unwrap();
-            let mut parts = field.splitn(2, '=');
-            let tag = parts.next(); // Skip tag
-            let tag: u32 = tag.parse().unwrap();
-            let value = parts.next().unwrap();
+            let value = fields.next().unwrap();
             let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(0))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
