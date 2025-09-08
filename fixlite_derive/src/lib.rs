@@ -322,7 +322,7 @@ fn generate_field_parser(
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
         }
     } else {
-        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))? }
+        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(0))? }
     };
 
     quote! {
