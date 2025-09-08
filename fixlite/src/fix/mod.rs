@@ -14,7 +14,7 @@ pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType
         let mut parts = field.splitn(2, |c| *c == b'=');
         let tag = parts.next().ok_or(FixError::InvalidMessage)?;
         if tag == b"35" {
-            let value = parts.next().ok_or(FixError::InvalidValue("35"))?;
+            let value = parts.next().ok_or(FixError::InvalidValue(0))?;
             let value = std::str::from_utf8(value)?;
             return MsgType::from_str(value);
         }
@@ -110,7 +110,7 @@ macro_rules! pub_fix_enum {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
                     $( $str_val => Ok($enum_name::$variant), )*
-                    _ => Err(FixError::InvalidValue(concat!($tag, "(", stringify!($enum_name), ")"))),
+                    _ => Err(FixError::InvalidValue(0)),
                 }
             }
         }
