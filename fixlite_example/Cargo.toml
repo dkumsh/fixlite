@@ -11,4 +11,3 @@ publish = false
 chrono =  { workspace = true }
 fixlite = { path = "../fixlite" }
 fixlite_derive = { path = "../fixlite_derive" }
-memchr = "2.7.5"
