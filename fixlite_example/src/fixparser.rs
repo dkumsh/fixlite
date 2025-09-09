@@ -75,7 +75,7 @@ pub struct FixMsg<'a> {
 }
 
 // Быстрый парс int без аллокаций; не допускает знака/пробелов.
-#[inline]
+#[inline(always)]
 fn parse_u32(bytes: &[u8]) -> Option<u32> {
     let mut x: u32 = 0;
     if bytes.is_empty() {
@@ -91,7 +91,7 @@ fn parse_u32(bytes: &[u8]) -> Option<u32> {
     Some(x)
 }
 
-#[inline]
+#[inline(always)]
 fn parse_u64(bytes: &[u8]) -> Option<u64> {
     let mut x: u64 = 0;
     if bytes.is_empty() {
@@ -109,7 +109,7 @@ fn parse_u64(bytes: &[u8]) -> Option<u64> {
 
 // Парсинг десятичного числа в фиксированную точку: возвращает mantissa и scale.
 // Пример: b"123.45" -> (12345, 2). Никаких аллокаций.
-#[inline]
+#[inline(always)]
 fn parse_decimal_fp(bytes: &[u8]) -> Option<(i64, i32)> {
     if bytes.is_empty() {
         return None;
@@ -200,44 +200,4 @@ pub fn parse_fix<'a>(buf: &'a [u8]) -> Result<FixMsg<'a>, FixParseError> {
     }
 
     Ok(msg)
-}
-
-fn main() {
-    // Используем '|' для наглядности; в реальном потоке это 0x01.
-    let s = b"8=FIX.4.4|9=112|35=D|49=SENDER|56=TARGET|11=ABC123|55=EUR/USD|54=1|38=1000|44=1.2345|52=20250907-12:34:56.789|10=128|";
-    let s = s
-        .iter()
-        .map(|&b| if b == b'|' { 0x01 } else { b })
-        .collect::<Vec<u8>>();
-
-    let mut buf = Vec::with_capacity(100000);
-    const M: usize = 1_000_000;
-    const N: usize = 100;
-    for _ in 0..N {
-        buf.extend_from_slice(&s);
-    }
-
-    let start = std::time::Instant::now();
-    let len = s.len();
-    for _ in 0..M {
-        let mut start = 0;
-        let mut end = len;
-        for _ in 0..N {
-            let m = parse_fix(&buf[start..end]).expect("ok");
-            if m.body_length != Some(112) {
-                panic!("bad");
-            }
-            start = end;
-            end += len;
-        }
-    }
-    let elapsed = start.elapsed();
-    println!("elapsed = {:?}", elapsed);
-    /*
-        assert_eq!(m.msg_type.unwrap(), b"D");
-        assert_eq!(m.cl_ord_id.unwrap(), b"ABC123");
-        assert_eq!(m.order_qty, Some(1000));
-        assert_eq!(m.price_fp, Some(12345)); // 1.2345 -> mantissa 12345
-        assert_eq!(m.price_scale, 4);
-    */
 }

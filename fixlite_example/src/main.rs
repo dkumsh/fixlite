@@ -1,6 +1,7 @@
 // src/main.rs
 
-use fixlite::FixDeserialize;
+mod fixparser;
+
 use fixlite::fix_tag_registry;
 use fixlite_derive::FixDeserialize;
 
@@ -51,7 +52,7 @@ fn main() {
         .collect::<Vec<u8>>();
 
     let mut buf = Vec::with_capacity(100000);
-    const M: usize = 1_000_0;
+    const M: usize = 1_000_000;
     const N: usize = 100;
     for _ in 0..N {
         buf.extend_from_slice(&s);
@@ -63,7 +64,9 @@ fn main() {
         let mut start = 0;
         let mut end = len;
         for _ in 0..N {
-            let m: MarketDataMessage = MarketDataMessage::from_fix(&buf[start..end]).unwrap();
+            //let m = MarketDataMessage::from_fix(&buf[start..end]).unwrap();
+            let m = fixparser::parse_fix(&buf[start..end]).expect("ok");
+
             if m.body_length != Some(112) {
                 panic!("bad");
             }
