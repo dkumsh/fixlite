@@ -91,13 +91,11 @@ fn compare_generic_arguments(
 }
 
 pub fn is_str_ref(ty: &Type) -> bool {
-    if let Type::Reference(type_ref) = ty {
-        if let Type::Path(type_path) = &*type_ref.elem {
-            if let Some(segment) = type_path.path.segments.first() {
-                return segment.ident == "str";
-            }
+    if let Type::Reference(type_ref) = ty
+        && let Type::Path(type_path) = &*type_ref.elem
+        && let Some(segment) = type_path.path.segments.first() {
+            return segment.ident == "str";
         }
-    }
     false
 }
 
