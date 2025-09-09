@@ -1,8 +1,8 @@
 mod price;
 pub mod tag;
 
-pub use crate::fix::price::{FixedPrice, Price};
 pub use crate::FixError;
+pub use crate::fix::price::{FixedPrice, Price};
 use std::convert::TryFrom;
 use std::fmt;
 use std::num::ParseIntError;

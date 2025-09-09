@@ -1,11 +1,11 @@
 extern crate proc_macro;
 
-use fixlite::type_check::{is_str_ref, IsTypeCompatible};
+use fixlite::type_check::{IsTypeCompatible, is_str_ref};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Ident,
-    Lifetime, Lit, Type, WherePredicate,
+    Attribute, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, Lit, Type, WherePredicate,
+    parse_macro_input, parse_quote,
 };
 
 #[proc_macro_derive(FixDeserialize, attributes(fix, fix_group, fix_registry))]

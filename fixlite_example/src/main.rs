@@ -74,7 +74,7 @@ fn main() {}
 mod tests {
     use crate::{Container, MarketDataMessage};
     use fixlite::fix::MsgType;
-    use fixlite::{fix_tag_registry, FixDeserialize};
+    use fixlite::{FixDeserialize, fix_tag_registry};
     use fixlite_derive::FixDeserialize;
 
     fn fix(message: &[u8]) -> Vec<u8> {

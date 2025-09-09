@@ -1,5 +1,5 @@
 use syn::{
-    parse_str, AngleBracketedGenericArguments, GenericArgument, PathArguments, Type, TypePath,
+    AngleBracketedGenericArguments, GenericArgument, PathArguments, Type, TypePath, parse_str,
 };
 
 fn is_syn_type_compatible(expected_type: &str, syn_type: &Type) -> bool {
