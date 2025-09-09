@@ -27,7 +27,10 @@ impl<'a> FixParser<'a> {
         let remaining = &self.data[self.position..];
 
         // Find the first '=' which separates tag from value
-        let equals_pos = memchr::memchr(b'=', remaining).ok_or(FixParseError::InvalidFormat)?;
+        let equals_pos = remaining
+            .iter()
+            .position(|&b| b == b'=')
+            .ok_or(FixParseError::InvalidFormat)?;
 
         // Parse the tag (everything before '=')
         let tag_bytes = &remaining[..equals_pos];
@@ -35,8 +38,10 @@ impl<'a> FixParser<'a> {
 
         // Find the SOH (0x01) delimiter that ends this field
         let value_start = equals_pos + 1;
-        let soh_pos =
-            memchr::memchr(0x01, &remaining[value_start..]).ok_or(FixParseError::InvalidFormat)?;
+        let soh_pos = remaining[value_start..]
+            .iter()
+            .position(|&b| b == 0x01)
+            .ok_or(FixParseError::InvalidFormat)?;
 
         let value_end = value_start + soh_pos;
         let value = &remaining[value_start..value_end];
