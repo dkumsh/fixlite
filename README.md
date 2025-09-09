@@ -76,4 +76,5 @@ let raw = b"8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.12
 let message = TestMessage::from_fix_with_separator(raw,'|')?;
 ```
 ## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is dual-licensed under MIT OR LGPL-3.0-or-later. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-LGPL-3.0](LICENSE-LGPL-3.0) files for details.
+
