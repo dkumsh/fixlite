@@ -123,7 +123,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                             let tag = tag_opt.expect("group tag must be specified");
                             tag_value = Some(tag.clone());
-                            known_tags.push(tag.parse().unwrap()); // group-counter tags belong to the outer struct
+                            known_tags.push(::fixlite::parse_u32(tag.as_bytes()).unwrap()); // group-counter tags belong to the outer struct
                         }
                     }
 
@@ -195,7 +195,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                             if tag.is_empty() {
                                 break;
                             }
-                            let tag: u32 = tag.parse().unwrap();
+                            let tag: u32 = ::fixlite::parse_u32(tag.as_bytes()).unwrap();
 
                             // ---------- REPEATING GROUPS ----------
                             // The following checks heuristically detect the boundaries of elements
@@ -310,7 +310,7 @@ fn generate_field_parser(
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
-    let tag: u32 = tag.parse().unwrap();
+    let tag: u32 = ::fixlite::parse_u32(tag.as_bytes()).unwrap();
 
     // Determine the actual type to parse into
     let parse_into_type = if let Some(inner_type) = extract_inner_type(field_type, "Option") {
@@ -348,7 +348,7 @@ fn generate_group_parser(
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
-    let tag: u32 = tag.parse().unwrap();
+    let tag: u32 = ::fixlite::parse_u32(tag.as_bytes()).unwrap();
 
     // Extract inner type from Vec<T>
     let inner_type =

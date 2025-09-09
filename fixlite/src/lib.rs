@@ -40,3 +40,20 @@ pub trait FixDeserialize<'fix>: Sized {
 
     fn is_known_tag(tag: u32) -> bool;
 }
+
+// Быстрый парс int без аллокаций; не допускает знака/пробелов.
+#[inline(always)]
+pub fn parse_u32(bytes: &[u8]) -> Result<u32, FixError> {
+    let mut x: u32 = 0;
+    if bytes.is_empty() {
+        return Err(FixError::InvalidValue(0));
+    }
+    for &b in bytes {
+        let d = b.wrapping_sub(b'0');
+        if d > 9 {
+            return Err(FixError::InvalidValue(0));
+        }
+        x = x * 10 + d as u32;
+    }
+    Ok(x)
+}
