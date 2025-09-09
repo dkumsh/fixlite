@@ -9,7 +9,9 @@ pub enum FixError {
     #[error("Invalid FIX message")]
     InvalidMessage,
     #[error("Invalid value for tag {0}")]
-    InvalidValue(&'static str),
+    InvalidValue(u32),
+    #[error("Invalid enum value for tag {0}")]
+    InvalidEnumValue(&'static str),
     #[error("Missing required field {0}")]
     MissingField(&'static str),
     #[error("UTF-8 parsing error")]
@@ -37,7 +39,7 @@ pub trait FixDeserialize<'fix>: Sized {
     ) -> Result<Self, FixError>
     where
         I: Iterator<Item = &'fix str>,
-        F: Fn(&str) -> bool;
+        F: Fn(u32) -> bool;
 
-    fn is_known_tag(tag: &str) -> bool;
+    fn is_known_tag(tag: u32) -> bool;
 }

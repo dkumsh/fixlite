@@ -74,7 +74,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             let mut field_initializers = Vec::new();
             let mut field_names = Vec::new();
             let mut field_checks = Vec::new();
-            let mut known_tags: Vec<String> = Vec::new(); // Collect known tags
+            let mut known_tags: Vec<u32> = Vec::new(); // Collect known tags
             let mut component_handlers = Vec::new();
 
             if let Fields::Named(ref fields_named) = data_struct.fields {
@@ -99,7 +99,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                                 // <-- put it into the constant list *unless* this field is a component
                                 if !is_component {
-                                    known_tags.push(tag.clone());
+                                    known_tags.push(tag.parse().unwrap());
                                 }
                                 if let Ok(tag_u32) = tag.parse::<u32>() {
                                     if let Some(inner_type) =
@@ -123,7 +123,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
 
                             let tag = tag_opt.expect("group tag must be specified");
                             tag_value = Some(tag.clone());
-                            known_tags.push(tag); // group-counter tags belong to the outer struct
+                            known_tags.push(tag.parse().unwrap()); // group-counter tags belong to the outer struct
                         }
                     }
 
@@ -152,6 +152,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         field_checks.push(generate_field_check(field_name, field_type));
                     } else if let Some(tag) = tag_value {
                         // regular field or repeating-group
+                        let tag: u32 = tag.parse().unwrap();
                         if is_group {
                             field_parsers.push(generate_group_parser(
                                 field_name,
@@ -185,7 +186,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     ) -> Result<Self, #fix_module_path::FixError>
                     where
                         I: Iterator<Item = &#fix_lifetime str>,
-                        F: Fn(&str) -> bool,
+                        F: Fn(u32) -> bool,
                     {
                         use chrono::{NaiveDateTime, DateTime, Utc};
                         let mut first_tag = None;
@@ -197,7 +198,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 continue;
                             }
                             let mut parts = field.splitn(2, '=');
-                            let tag = parts.next().unwrap();
+                            let tag = parts.next().unwrap().parse::<u32>().expect("Cannot parse tag as u32");
 
                             // ---------- REPEATING GROUPS ----------
                             // The following checks heuristically detect the boundaries of elements
@@ -249,8 +250,8 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         })
                     }
 
-                    fn is_known_tag(tag: &str) -> bool {
-                        const KNOWN_TAGS: [&str; #known_tags_len] = [#(#known_tags_tokens),*];
+                    fn is_known_tag(tag: u32) -> bool {
+                        const KNOWN_TAGS: [u32; #known_tags_len] = [#(#known_tags_tokens),*];
                         KNOWN_TAGS.binary_search(&tag).is_ok()
                     }
                 }
@@ -308,7 +309,7 @@ fn parse_fix_attribute(attr: &Attribute) -> (bool, Option<String>) {
 fn generate_field_parser(
     field_name: &Ident,
     field_type: &Type,
-    tag: String,
+    tag: u32,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
@@ -346,7 +347,7 @@ fn generate_field_parser(
 fn generate_group_parser(
     field_name: &Ident,
     field_type: &Type,
-    tag: String,
+    tag: u32,
     fix_lifetime: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
@@ -359,7 +360,7 @@ fn generate_group_parser(
         #tag => {
             let field = fields.next().unwrap();
             let mut parts = field.splitn(2, '=');
-            let tag = parts.next(); // Skip tag
+            let tag = parts.next().unwrap().parse::<u32>().expect("Cannot parse tag as u32"); // Skip tag
             let value = parts.next().unwrap();
             let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
