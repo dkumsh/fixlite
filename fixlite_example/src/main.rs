@@ -18,29 +18,29 @@ fix_tag_registry! {
 #[fix_registry(MyRegistry)]
 struct MarketDataMessage<'a> {
     #[fix(tag = 8)]
-    pub begin_string: &'a str,
+    pub begin_string: Option<&'a str>,
     #[fix(tag = 9)]
-    pub body_length: u32,
+    pub body_length: Option<u32>,
     #[fix(tag = 35)]
-    pub msg_type: &'a str,
+    pub msg_type: Option<&'a str>,
     #[fix(tag = 49)]
-    pub sender_comp_id: &'a str,
+    pub sender_comp_id: Option<&'a str>,
     #[fix(tag = 56)]
-    pub target_comp_id: &'a str,
+    pub target_comp_id: Option<&'a str>,
     #[fix(tag = 11)]
-    pub cl_ord_id: &'a str,
+    pub cl_ord_id: Option<&'a str>,
     #[fix(tag = 55)]
     pub symbol: Option<&'a str>,
     #[fix(tag = 54)]
-    pub side: &'a str,
+    pub side: Option<&'a str>,
     #[fix(tag = 38)]
-    pub order_qty: u64,
+    pub order_qty: Option<u64>,
     #[fix(tag = 44)]
-    pub price: &'a str,
+    pub price: Option<&'a str>,
     #[fix(tag = 52)]
-    pub sending_time: &'a str,
+    pub sending_time: Option<&'a str>,
     #[fix(tag = 10)]
-    pub checksum: u32,
+    pub checksum: Option<u32>,
 }
 
 fn main() {
@@ -51,7 +51,7 @@ fn main() {
         .collect::<Vec<u8>>();
 
     let mut buf = Vec::with_capacity(100000);
-    const M: usize = 1_000_000;
+    const M: usize = 1_000_0;
     const N: usize = 100;
     for _ in 0..N {
         buf.extend_from_slice(&s);
@@ -64,7 +64,7 @@ fn main() {
         let mut end = len;
         for _ in 0..N {
             let m: MarketDataMessage = MarketDataMessage::from_fix(&buf[start..end]).unwrap();
-            if m.body_length != 112 {
+            if m.body_length != Some(112) {
                 panic!("bad");
             }
             start = end;
