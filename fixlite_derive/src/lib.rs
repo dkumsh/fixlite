@@ -422,10 +422,11 @@ fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::T
 fn extract_inner_type<'a>(field_type: &'a Type, expected_outer: &str) -> Option<&'a Type> {
     if let Type::Path(type_path) = field_type
         && let Some(segment) = type_path.path.segments.first()
-            && segment.ident == expected_outer
-                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                    && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        return Some(inner_type);
-                    }
+        && segment.ident == expected_outer
+        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+    {
+        return Some(inner_type);
+    }
     None
 }
