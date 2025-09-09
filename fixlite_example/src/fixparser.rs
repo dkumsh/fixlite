@@ -26,15 +26,26 @@ impl<'a> FixParser<'a> {
 
         let remaining = &self.data[self.position..];
 
-        // Find the first '=' which separates tag from value
-        let equals_pos = remaining
-            .iter()
-            .position(|&b| b == b'=')
-            .ok_or(FixParseError::InvalidFormat)?;
+        let mut tag = 0u32;
+        let mut equals_pos = 0;
+        let mut pos = 0;
 
-        // Parse the tag (everything before '=')
-        let tag_bytes = &remaining[..equals_pos];
-        let tag = parse_u32(tag_bytes).ok_or(FixParseError::InvalidTag)?;
+        for &b in remaining {
+            if b == b'=' {
+                equals_pos = pos;
+                break;
+            }
+            let d = b.wrapping_sub(b'0');
+            if d > 9 {
+                return Err(FixParseError::InvalidTag);
+            }
+            tag = tag * 10 + d as u32;
+            pos += 1;
+        }
+
+        if equals_pos == 0 {
+            return Err(FixParseError::InvalidFormat);
+        }
 
         // Find the SOH (0x01) delimiter that ends this field
         let value_start = equals_pos + 1;
