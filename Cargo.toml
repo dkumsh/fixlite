@@ -6,6 +6,7 @@ repository = "https://github.com/dkumsh/fixlite"
 edition = "2024"
 keywords = ["fix", "serialization"]
 version = "0.3.16"
+readme = "README.md"
 
 [workspace]
 resolver = "2"
