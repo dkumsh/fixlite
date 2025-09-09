@@ -6,6 +6,7 @@ edition.workspace = true
 keywords.workspace = true
 version.workspace = true
 publish = false
+readme.workspace  = true
 license.workspace = true
 
 [dependencies]
