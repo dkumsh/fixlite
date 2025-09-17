@@ -10,6 +10,6 @@ readme.workspace  = true
 license.workspace = true
 
 [dependencies]
-chrono =  { workspace = true }
+chrono = { workspace = true }
 fixlite = { path = "../fixlite" }
 fixlite_derive = { path = "../fixlite_derive" }

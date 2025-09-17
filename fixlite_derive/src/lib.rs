@@ -180,26 +180,18 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             quote! {
                 impl #impl_generics_new #fix_module_path::FixDeserialize<#fix_lifetime> for #struct_name #ty_generics #where_clause_new {
 
-                    fn deserialize_fields<I, F>(
-                        fields: &mut std::iter::Peekable<I>,
+                    fn deserialize_fields<F>(
+                        tags: &mut #fix_module_path::TagCursor<#fix_lifetime>,
                         is_a_top_level_tag: F,
                     ) -> Result<Self, #fix_module_path::FixError>
                     where
-                        I: Iterator<Item = &#fix_lifetime str>,
                         F: Fn(u32) -> bool,
                     {
                         use chrono::{NaiveDateTime, DateTime, Utc};
                         let mut first_tag = None;
                         #(#field_initializers)*
 
-                        while let Some(field) = fields.peek().map(|x| *x) {
-                            if field.is_empty() {
-                                fields.next();
-                                continue;
-                            }
-                            let mut parts = field.splitn(2, '=');
-                            let tag = parts.next().unwrap().parse::<u32>().expect("Cannot parse tag as u32");
-
+                        while let Some(tag) = tags.peek_tag_u32() {
                             // ---------- REPEATING GROUPS ----------
                             // The following checks heuristically detect the boundaries of elements
                             // within a repeating group and identify the end of the group.
@@ -236,7 +228,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 #(#field_parsers)*
                                 _ => {
                                     // Unrecognized tag, consume and ignore.
-                                    fields.next();
+                                    tags.skip();
                                 }
                             }
                         }
@@ -335,10 +327,7 @@ fn generate_field_parser(
 
     quote! {
         #tag => {
-            let field = fields.next().unwrap();
-            let mut parts = field.splitn(2, '=');
-            parts.next(); // Skip tag
-            let value = parts.next().unwrap();
+            let value = tags.next().unwrap();
             #field_var = Some(#parse_value);
         },
     }
@@ -358,14 +347,11 @@ fn generate_group_parser(
 
     quote! {
         #tag => {
-            let field = fields.next().unwrap();
-            let mut parts = field.splitn(2, '=');
-            let tag = parts.next().unwrap().parse::<u32>().expect("Cannot parse tag as u32"); // Skip tag
-            let value = parts.next().unwrap();
+            let value = tags.next().unwrap();
             let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
-                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::deserialize_fields(fields, |tag| Self::is_known_tag(tag))?;
+                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::deserialize_fields(tags, |tag| Self::is_known_tag(tag))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);
@@ -386,7 +372,7 @@ fn generate_component_parser(
         {
             let value =
                 <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>
-                    ::deserialize_fields(fields, |t| Self::is_known_tag(t))?;
+                    ::deserialize_fields(tags, |t| Self::is_known_tag(t))?;
             #field_var = Some(value);
             continue;           // we already consumed the component’s fields
         }

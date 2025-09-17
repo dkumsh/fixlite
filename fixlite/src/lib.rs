@@ -1,7 +1,8 @@
 pub mod fix;
+pub mod scanner;
 pub mod type_check;
+pub use scanner::{TagCursor, parse_u32_ascii};
 
-use std::iter::Peekable;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -22,23 +23,20 @@ pub enum FixError {
 
 pub trait FixDeserialize<'fix>: Sized {
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
-        let fix_message_str = std::str::from_utf8(fix_message)?;
-        let mut fields = fix_message_str.split('\x01').peekable();
-        Self::deserialize_fields(&mut fields, |_| false)
+        let mut cur = TagCursor::new(fix_message, b'\x01');
+        Self::deserialize_fields(&mut cur, |_| false)
     }
 
-    fn from_fix_with_separator(fix_message: &'fix [u8], separator: char) -> Result<Self, FixError> {
-        let fix_message_str = std::str::from_utf8(fix_message)?;
-        let mut fields = fix_message_str.split(separator).peekable();
-        Self::deserialize_fields(&mut fields, |_| false)
+    fn from_fix_with_separator(fix_message: &'fix [u8], separator: u8) -> Result<Self, FixError> {
+        let mut cur = TagCursor::new(fix_message, separator);
+        Self::deserialize_fields(&mut cur, |_| false)
     }
 
-    fn deserialize_fields<I, F>(
-        fields: &mut Peekable<I>,
+    fn deserialize_fields<F>(
+        cur: &mut TagCursor<'fix>,
         is_a_parent_tag: F,
     ) -> Result<Self, FixError>
     where
-        I: Iterator<Item = &'fix str>,
         F: Fn(u32) -> bool;
 
     fn is_known_tag(tag: u32) -> bool;
