@@ -18,6 +18,40 @@ impl<'a> FixParser<'a> {
 
     /// Tries to parse the next field, returning Ok(None) when no more fields are available
     #[inline(always)]
+    pub fn try_peek_tag(&self) -> Result<Option<u32>, FixParseError> {
+        // Check if we've reached the end
+        if self.position >= self.data.len() {
+            return Ok(None);
+        }
+
+        let remaining = &self.data[self.position..];
+
+        let mut tag = 0u32;
+        let mut equals_pos = 0;
+        let mut pos = 0;
+
+        for &b in remaining {
+            if b == b'=' {
+                equals_pos = pos;
+                break;
+            }
+            let d = b.wrapping_sub(b'0');
+            if d > 9 {
+                return Err(FixParseError::InvalidTag);
+            }
+            tag = tag * 10 + d as u32;
+            pos += 1;
+        }
+
+        if equals_pos == 0 {
+            return Err(FixParseError::InvalidFormat);
+        }
+
+        Ok(Some(tag))
+    }
+
+    /// Tries to parse the next field, returning Ok(None) when no more fields are available
+    #[inline(always)]
     pub fn try_next(&mut self) -> Result<Option<(u32, &'a [u8])>, FixParseError> {
         // Check if we've reached the end
         if self.position >= self.data.len() {
