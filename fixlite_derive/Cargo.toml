@@ -16,4 +16,4 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = { workspace = true }
 syn = { workspace = true }
-fixlite = { version = "0.3.23", path = "../fixlite" }
+fixlite = { version = "0.3.24", path = "../fixlite" }
