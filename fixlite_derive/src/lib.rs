@@ -322,12 +322,12 @@ fn generate_field_parser(
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
         }
     } else {
-        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))? }
+        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(0))? }
     };
 
     quote! {
         #tag => {
-            let value = tags.next().unwrap();
+            let value = tags.next_value().unwrap();
             #field_var = Some(#parse_value);
         },
     }
@@ -347,7 +347,7 @@ fn generate_group_parser(
 
     quote! {
         #tag => {
-            let value = tags.next().unwrap();
+            let value = tags.next_value().unwrap();
             let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {

@@ -13,3 +13,10 @@ license.workspace = true
 chrono = { workspace = true }
 fixlite = { path = "../fixlite" }
 fixlite_derive = { path = "../fixlite_derive" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "parser_bench"
+harness = false
