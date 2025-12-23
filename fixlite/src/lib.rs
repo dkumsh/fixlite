@@ -1,7 +1,8 @@
 pub mod fix;
-pub mod scanner;
+mod scanner;
 pub mod type_check;
 pub use scanner::TagCursor;
+extern crate self as fixlite;
 
 use thiserror::Error;
 
@@ -30,11 +31,6 @@ pub enum FixError {
 pub trait FixDeserialize<'fix>: Sized {
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let mut cur = TagCursor::new(fix_message, b'\x01');
-        Self::deserialize_fields(&mut cur, |_| false)
-    }
-
-    fn from_fix_with_separator(fix_message: &'fix [u8], separator: u8) -> Result<Self, FixError> {
-        let mut cur = TagCursor::new(fix_message, separator);
         Self::deserialize_fields(&mut cur, |_| false)
     }
 

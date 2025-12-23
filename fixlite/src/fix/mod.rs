@@ -1,7 +1,9 @@
+pub mod builder;
 mod price;
 pub mod tag;
 
 pub use crate::FixError;
+pub use crate::fix::builder::{AsFixStr, FixBuilder, FixSendingTime, FixSeqNum, FixValue, SOH};
 pub use crate::fix::price::{FixedPrice, Price};
 use std::convert::TryFrom;
 use std::fmt;
@@ -117,6 +119,14 @@ macro_rules! pub_fix_enum {
 
         impl $enum_name {
             pub fn as_str(&self) -> &str {
+                match self {
+                    $( $enum_name::$variant => $str_val, )*
+                }
+            }
+        }
+
+        impl $crate::fix::builder::AsFixStr for $enum_name {
+            fn as_fix_str(&self) -> &'static str {
                 match self {
                     $( $enum_name::$variant => $str_val, )*
                 }

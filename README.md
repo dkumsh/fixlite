@@ -1,5 +1,5 @@
 # fixlite
-fixlite is a Rust crate designed to facilitate the deserialization of FIX (Financial Information eXchange) protocol messages. It provides a procedural macro, FixDeserialize, to automatically generate deserialization implementations for your structs, and a macro, fix_tag_registry!, to define registries that map FIX tags to their corresponding Rust types.
+fixlite is a Rust crate for parsing and building FIX (Financial Information eXchange) protocol messages. It provides a procedural macro, FixDeserialize, to automatically generate deserialization implementations for your structs, a macro, fix_tag_registry!, to define registries that map FIX tags to their corresponding Rust types, and a FixBuilder that encodes values via the FixValue trait.
 
 ## Features
  * Automatic deserialization of FIX messages into Rust structs using #[derive(FixDeserialize)].
@@ -7,6 +7,8 @@ fixlite is a Rust crate designed to facilitate the deserialization of FIX (Finan
  * Customizable tag-to-type mappings through registries defined with fix_tag_registry!.
  * Compile-time validation of tag-type associations to ensure correctness.
  * Zero-copy deserialization for string fields defined as &str, enhancing performance by avoiding unnecessary allocations.
+ * Message building with FixBuilder and the build_fix! macro.
+ * Trait-based field encoding via FixValue and AsFixStr for enums.
 
 ## Usage
 ### Defining a Registry
@@ -17,7 +19,7 @@ use fixlite::fix_tag_registry;
 
 fix_tag_registry! {
     MyRegistry {
-        35 => [fixlite::MsgType],
+        35 => [fixlite::fix::MsgType],
         31 => [f64], // LastPx
         8001 => [f64],
     }
@@ -37,8 +39,8 @@ use fixlite::FixDeserialize;
 #[derive(FixDeserialize, Debug)]
 #[fix_registry(MyRegistry)]
 struct TestMessage<'a> {
-#[fix(tag = 35)]
-msg_type: fixlite::MsgType,
+    #[fix(tag = 35)]
+    msg_type: fixlite::fix::MsgType,
 
     #[fix(tag = 31)]
     last_px: Option<f64>,
@@ -52,6 +54,32 @@ msg_type: fixlite::MsgType,
     #[fix(tag = 55)]
     symbol: &'a str, // Zero-copy deserialization
 }
+```
+## Building FIX Messages
+Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically.
+
+```rust
+use chrono::Utc;
+use fixlite::build_fix;
+use fixlite::fix::{FixBuilder, HandlInst, MsgType, OrdType, Side, TimeInForce};
+
+let mut builder = FixBuilder::new("FIX.4.2", "BUYER", "SELLER");
+let dt = Utc::now();
+
+let msg = build_fix!(
+    builder,
+    2u64,
+    dt,
+    MsgType::NewOrderSingle,
+    11, "123",
+    21, HandlInst::Automated,
+    55, "IBM",
+    54, Side::Buy,
+    38, 100u32,
+    40, OrdType::Limit,
+    44, "150.25",
+    59, TimeInForce::Day,
+);
 ```
 ### Attributes
  * `#[fix(tag = N)]`: Maps the field to FIX tag N.
@@ -69,12 +97,15 @@ Given a FIX message:
 ``` 
 8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|
 ```
-You can deserialize using from_fix() for SOH delimiter or for custom delimiters use from_fix_with_separator it as follows:
+You can deserialize using from_fix() for SOH delimiter. If your input uses another separator, replace it before parsing:
 
 ```rust
 let raw = b"8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|";
-let message = TestMessage::from_fix_with_separator(raw,'|')?;
+let message = raw
+    .iter()
+    .map(|&b| if b == b'|' { b'\x01' } else { b })
+    .collect::<Vec<u8>>();
+let parsed = TestMessage::from_fix(&message)?;
 ```
 ## License
 This project is dual-licensed under MIT OR LGPL-3.0-or-later. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-LGPL-3.0](LICENSE-LGPL-3.0) files for details.
-
