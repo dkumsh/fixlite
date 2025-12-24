@@ -18,4 +18,3 @@ chrono = "0.4"
 quote = "1.0.37"
 syn = {  version = "2.0.96", features = ["derive", "visit-mut"] }
 thiserror = "1.0"
-ryu = "1.0"

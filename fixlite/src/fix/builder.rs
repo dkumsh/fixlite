@@ -132,13 +132,7 @@ impl FixValue for usize {
 impl FixValue for i64 {
     #[inline]
     fn encode(&self, out: &mut Vec<u8>) {
-        if *self < 0 {
-            out.push(b'-');
-            // NOTE: i64::MIN will wrap here; if that's a concern, handle it explicitly.
-            push_u64_ascii(out, self.wrapping_neg() as u64);
-        } else {
-            push_u64_ascii(out, *self as u64);
-        }
+        push_i64_ascii(out, *self);
     }
 }
 impl FixValue for i32 {
@@ -148,11 +142,70 @@ impl FixValue for i32 {
     }
 }
 
+const DIGITS_U16: [u16; 100] = digits_00_99_u16();
 impl FixValue for f64 {
     #[inline]
     fn encode(&self, out: &mut Vec<u8>) {
-        let mut buf = ryu::Buffer::new();
-        out.extend_from_slice(buf.format(*self).as_bytes());
+        if !self.is_finite() {
+            return;
+        }
+        let mut value = *self;
+        if value < 0.0 {
+            out.push(b'-');
+            value = -value;
+        }
+        let whole = value as u64;
+        let len = out.len();
+        push_u64_ascii(out, whole);
+        let wd = if whole != 0 {
+            (out.len() - len) as u32
+        } else {
+            0
+        };
+
+        if wd < 15 {
+            let mut factor = 10u64.pow(15 - wd);
+            let fraction = value - whole as f64;
+
+            // IEEE-754: round to nearest, ties to even (banker's rounding)
+            let scaled = fraction * (factor as f64);
+            let mut fraction = scaled.round() as u64;
+
+            if fraction == factor {
+                if let Some(next) = whole.checked_add(1) {
+                    out.truncate(len); // rewind to before writing whole
+                    push_u64_ascii(out, next);
+                }
+                // else: whole == u64::MAX, cannot carry; keep already-written whole
+                return;
+            }
+
+            if fraction > 0 {
+                out.push(b'.');
+                while fraction > 0 {
+                    let n: usize; // 0..100 (index into DIGITS_U16)
+
+                    if factor >= 100 {
+                        factor /= 100;
+                        n = (fraction / factor) as usize;
+                        fraction %= factor;
+                    } else if factor == 10 {
+                        n = (fraction as usize) * 10;
+                        fraction = 0;
+                    } else {
+                        n = fraction as usize;
+                        fraction = 0;
+                    }
+                    let pair = DIGITS_U16[n];
+                    let [tens, ones] = pair.to_ne_bytes();
+                    if fraction > 0 || ones != b'0' {
+                        push_2_u16(out, pair);
+                    } else {
+                        out.push(tens);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -218,50 +271,83 @@ impl<const W: u32, const F: u32> FixValue for FixedPrice<W, F> {
 // --- small helpers (no fmt, no allocation) ---
 
 #[inline]
-fn digits_len(mut n: usize) -> usize {
-    let mut d = 1;
-    while n >= 10 {
-        n /= 10;
-        d += 1;
-    }
-    d
+fn push_2_u16(out: &mut Vec<u8>, pair: u16) {
+    out.reserve(2);
+    let start = out.len();
+
+    // Get 2 bytes of spare capacity
+    let spare = out.spare_capacity_mut();
+    let dst = &mut spare[..2];
+    debug_assert!(dst.len() >= 2);
+
+    let bytes = pair.to_ne_bytes();
+    dst[0].write(bytes[0]);
+    dst[1].write(bytes[1]);
+
+    unsafe { out.set_len(start + 2) };
 }
 
 #[inline]
 fn push_2(out: &mut Vec<u8>, n: u8) {
-    out.push(b'0' + (n / 10));
-    out.push(b'0' + (n % 10));
+    push_2_u16(out, DIGITS_U16[n as usize]);
 }
 
 #[inline]
 fn push_3(out: &mut Vec<u8>, n: u16) {
-    out.push(b'0' + ((n / 100) as u8));
-    out.push(b'0' + (((n / 10) % 10) as u8));
-    out.push(b'0' + ((n % 10) as u8));
+    out.push(b'0' + (n / 100) as u8);
+    push_2_u16(out, DIGITS_U16[(n % 100) as usize]);
 }
 
 #[inline]
 fn push_4(out: &mut Vec<u8>, n: u32) {
-    out.push(b'0' + (((n / 1000) % 10) as u8));
-    out.push(b'0' + (((n / 100) % 10) as u8));
-    out.push(b'0' + (((n / 10) % 10) as u8));
-    out.push(b'0' + ((n % 10) as u8));
+    debug_assert!(n < 10_000);
+    push_2_u16(out, DIGITS_U16[(n / 100) as usize]);
+    push_2_u16(out, DIGITS_U16[(n % 100) as usize]);
 }
 
 #[inline]
-fn push_u64_ascii(out: &mut Vec<u8>, mut n: u64) {
-    let mut tmp = [0u8; 20];
-    let mut i = tmp.len();
-    loop {
-        let digit = (n % 10) as u8;
-        i -= 1;
-        tmp[i] = b'0' + digit;
-        n /= 10;
-        if n == 0 {
-            break;
-        }
+fn push_i64_ascii(out: &mut Vec<u8>, value: i64) {
+    if value < 0 {
+        out.push(b'-');
+        // avoids UB for i64::MIN
+        push_u64_ascii(out, value.wrapping_neg() as u64);
+    } else {
+        push_u64_ascii(out, value as u64);
     }
-    out.extend_from_slice(&tmp[i..]);
+}
+
+fn push_u64_ascii(out: &mut Vec<u8>, mut value: u64) {
+    let len = num_digits(value);
+    let start = out.len();
+
+    out.reserve(len);
+    let spare = out.spare_capacity_mut();
+    debug_assert!(spare.len() >= len);
+
+    let mut i = len;
+
+    while value >= 100 {
+        let idx = (value % 100) as usize;
+        i -= 2;
+        let bytes = DIGITS_U16[idx].to_ne_bytes();
+        spare[i].write(bytes[0]);
+        spare[i + 1].write(bytes[1]);
+        value /= 100;
+    }
+
+    if value < 10 {
+        i -= 1;
+        spare[i].write(b'0' + value as u8);
+    } else {
+        let idx = value as usize;
+        i -= 2;
+        let bytes = DIGITS_U16[idx].to_ne_bytes();
+        spare[i].write(bytes[0]);
+        spare[i + 1].write(bytes[1]);
+    }
+
+    debug_assert_eq!(i, 0);
+    unsafe { out.set_len(start + len) };
 }
 
 #[inline]
@@ -370,7 +456,7 @@ impl FixBuilder {
         let body_len = body_end - body_start;
 
         // header: "8=<fixver><SOH>9=<len><SOH>"
-        let header_len = 2 + self.fix_version.len() + 1 + 2 + digits_len(body_len) + 1;
+        let header_len = 2 + self.fix_version.len() + 1 + 2 + num_digits(body_len) + 1;
         debug_assert!(header_len <= HEADER_SPACE);
 
         let header_start = body_start - header_len;
@@ -435,6 +521,52 @@ fn kv_bytes(buf: &mut Vec<u8>, tag: u32, bytes: &[u8]) {
     buf.push(SOH);
 }
 
+const fn digits_00_99_u16() -> [u16; 100] {
+    let mut out = [0u16; 100];
+    let mut n: usize = 0;
+    while n < 100 {
+        let tens = b'0' + (n as u8 / 10);
+        let ones = b'0' + (n as u8 % 10);
+        out[n] = u16::from_ne_bytes([tens, ones]);
+        n += 1;
+    }
+    out
+}
+
+use core::ops::DivAssign;
+
+trait UnsignedDigits: Copy + PartialOrd + From<u8> + DivAssign<Self> {}
+
+impl UnsignedDigits for u32 {}
+impl UnsignedDigits for u64 {}
+impl UnsignedDigits for usize {}
+
+#[inline]
+fn num_digits<T>(mut value: T) -> usize
+where
+    T: UnsignedDigits + From<u16>,
+{
+    let ten: T = 10u16.into();
+    let hundred: T = 100u16.into();
+    let thousand: T = 1000u16.into();
+    let ten_thousand: T = 10_000u16.into();
+
+    let mut len = 0usize;
+
+    while value >= ten_thousand {
+        value /= ten_thousand;
+        len += 4;
+    }
+
+    if value < hundred {
+        len += if value < ten { 1 } else { 2 };
+    } else {
+        len += if value < thousand { 3 } else { 4 };
+    }
+
+    len
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,6 +577,12 @@ mod tests {
     use chrono::{TimeZone, Timelike};
 
     // ---- Test-only FIX types ----
+
+    fn encode_f64(value: f64) -> String {
+        let mut out = Vec::new();
+        value.encode(&mut out);
+        String::from_utf8(out).expect("f64 encoding should be ASCII")
+    }
 
     #[derive(Copy, Clone, Debug)]
     enum TestMsgType {
@@ -669,6 +807,34 @@ mod tests {
     }
 
     // ---- Tests ----
+
+    #[test]
+    fn f64_encode_handles_integers_and_fractions() {
+        assert_eq!(encode_f64(0.0), "0");
+        assert_eq!(encode_f64(42.0), "42");
+        assert_eq!(encode_f64(1.5), "1.5");
+        assert_eq!(encode_f64(1.25), "1.25");
+        assert_eq!(encode_f64(1.234375), "1.234375");
+    }
+
+    #[test]
+    fn f64_encode_handles_leading_fractional_zeros_and_signs() {
+        assert_eq!(encode_f64(0.001953125), "0.001953125");
+        assert_eq!(encode_f64(-0.5), "-0.5");
+        assert_eq!(encode_f64(-1.25), "-1.25");
+    }
+
+    #[test]
+    fn f64_encode_handles_simple_decimals() {
+        assert_eq!(encode_f64(0.1), "0.1");
+        assert_eq!(encode_f64(0.01), "0.01");
+        assert_eq!(encode_f64(10.01), "10.01");
+    }
+
+    #[test]
+    fn f64_encode_rounds_and_carries_whole() {
+        assert_eq!(encode_f64(99_999_999_999_999.97), "100000000000000");
+    }
 
     #[test]
     fn begin_with_finish_produces_valid_header_length_and_checksum() {
