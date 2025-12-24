@@ -18,3 +18,7 @@ ryu = { workspace = true }
 
 [dev-dependencies]
 fixlite_derive = { path = "../fixlite_derive" }
+
+[features]
+default = []
+checksum = []

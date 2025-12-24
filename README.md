@@ -9,6 +9,7 @@ fixlite is a Rust crate for parsing and building FIX (Financial Information eXch
  * Zero-copy deserialization for string fields defined as &str, enhancing performance by avoiding unnecessary allocations.
  * Message building with FixBuilder and the build_fix! macro.
  * Trait-based field encoding via FixValue and AsFixStr for enums.
+ * Optional BodyLength/CheckSum validation during parsing when the `checksum` feature is enabled.
 
 ## Usage
 ### Defining a Registry
@@ -32,6 +33,11 @@ fix_tag_registry!(EmptyRegistry);
 ```
 ## Deserializing FIX Messages
 Annotate your struct with #[derive(FixDeserialize)] and use the provided attributes to specify how each field corresponds to FIX tags.
+To validate BodyLength and CheckSum during parsing, enable the `checksum` feature:
+
+```toml
+fixlite = { version = "...", features = ["checksum"] }
+```
 
 ```rust
 use fixlite::FixDeserialize;

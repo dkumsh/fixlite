@@ -25,6 +25,7 @@ build:
 # execute tests
 test:
    cargo test
+   cargo test --features checksum
 
 # execute benchmarks
 bench:

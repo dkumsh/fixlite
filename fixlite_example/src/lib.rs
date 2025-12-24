@@ -74,10 +74,56 @@ mod tests {
     }
 
     fn fix(message: &[u8]) -> Vec<u8> {
-        message
+        const SOH: u8 = 0x01;
+        let bytes: Vec<u8> = message
             .iter()
-            .map(|&b| if b == b'|' { b'\x01' } else { b })
-            .collect()
+            .map(|&b| if b == b'|' { SOH } else { b })
+            .collect();
+
+        let mut begin_string: Option<&[u8]> = None;
+        let mut body_fields: Vec<&[u8]> = Vec::new();
+
+        for field in bytes.split(|&b| b == SOH) {
+            if field.is_empty() {
+                continue;
+            }
+            let Some(eq) = field.iter().position(|&b| b == b'=') else {
+                continue;
+            };
+            let tag = &field[..eq];
+            let value = &field[eq + 1..];
+            match tag {
+                b"8" => begin_string = Some(value),
+                b"9" | b"10" => {}
+                _ => body_fields.push(field),
+            }
+        }
+
+        let begin_string = begin_string.expect("missing BeginString (8)");
+        let body_len: usize = body_fields.iter().map(|f| f.len() + 1).sum();
+
+        let mut out = Vec::with_capacity(bytes.len() + 16);
+        out.extend_from_slice(b"8=");
+        out.extend_from_slice(begin_string);
+        out.push(SOH);
+        out.extend_from_slice(b"9=");
+        out.extend_from_slice(body_len.to_string().as_bytes());
+        out.push(SOH);
+
+        for field in body_fields {
+            out.extend_from_slice(field);
+            out.push(SOH);
+        }
+
+        let sum: u32 = out.iter().map(|&b| b as u32).sum();
+        let checksum = (sum % 256) as u8;
+        out.extend_from_slice(b"10=");
+        out.push(b'0' + (checksum / 100));
+        out.push(b'0' + ((checksum / 10) % 10));
+        out.push(b'0' + (checksum % 10));
+        out.push(SOH);
+
+        out
     }
     #[test]
     fn repeating_group_test() {

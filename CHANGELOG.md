@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+- Optional single-pass BodyLength/CheckSum validation in `from_fix` behind the `checksum` feature flag.
+
 ## v0.3.25 - 2025-12-23
 ### Added
 - FixBuilder API with FixValue/AsFixStr and the build_fix! macro for message construction.
