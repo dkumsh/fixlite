@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file.
 
 ## Unreleased
+Target: v0.4.0
+
+### Added
+- Fallible FixBuilder field APIs (`try_field`, `try_field_ref`, `try_fields`) plus `TryFixValue` for `f64` validation (NaN/inf now error).
+
+### Documentation
+- Documented public FixBuilder APIs and updated README with fallible builder usage.
 
 ## v0.3.27 - 2025-12-25
 ### Changed

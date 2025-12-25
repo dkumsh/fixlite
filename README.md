@@ -64,7 +64,7 @@ struct TestMessage<'a> {
 }
 ```
 ## Building FIX Messages
-Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder, and fields can be used for optional or looped tags.
+Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder, and fields can be used for optional or looped tags. For fallible encoding (currently only `f64` rejects NaN/inf), use `try_field`/`try_field_ref` or `try_fields`, which return `Result`.
 
 ```rust
 use chrono::Utc;
@@ -90,6 +90,17 @@ let msg = builder
             m.str(tag, val);
         }
     })
+    .finish();
+```
+
+Fallible field example (for `f64` validation, in a `Result`-returning context):
+
+```rust
+let price = 150.25_f64;
+
+let msg = builder
+    .begin_with(&2u64, &dt, &MsgType::NewOrderSingle)
+    .try_field_ref(44, &price)?
     .finish();
 ```
 

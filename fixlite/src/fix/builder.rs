@@ -1,9 +1,13 @@
 use super::{DayOfMonth, price::FixedPrice};
 use chrono::{DateTime, Datelike, Timelike, Utc};
 
+/// FIX field delimiter (SOH / 0x01).
 pub const SOH: u8 = 0x01;
 const HEADER_SPACE: usize = 32; // bytes reserved for 8 & 9
 
+/// Build a FIX message with a single macro invocation.
+///
+/// This expands to `begin_with(...).field(...).finish()` using `FixBuilder`.
 #[macro_export]
 macro_rules! build_fix {
     ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(, $tag:expr, $val:expr )* $(,)?) => {{
@@ -18,7 +22,57 @@ macro_rules! build_fix {
 
 /// Values that can be encoded as a FIX field value (no heap allocation required).
 pub trait FixValue {
+    /// Encode the value into `out` without allocating.
     fn encode(&self, out: &mut Vec<u8>);
+}
+
+/// Fallible FIX value encoding for builders that need validation.
+///
+/// Note: in this crate, only `f64` is fallible (NaN/inf); other impls are infallible.
+pub trait TryFixValue {
+    /// Error returned when encoding fails.
+    type Error;
+    /// Encode the value into `out`, returning an error if the value is invalid.
+    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error>;
+}
+
+impl TryFixValue for f64 {
+    type Error = FixError;
+
+    #[inline]
+    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
+        let start = out.len();
+
+        // reuse existing fast encoder (may early-return and write nothing)
+        self.encode(out);
+
+        if out.len() == start {
+            // placeholder: we don't know the tag here; try_kv() will patch it
+            return Err(FixError::invalid_value(0));
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFixValue for str {
+    type Error = FixError;
+
+    #[inline]
+    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
+        out.extend_from_slice(self.as_bytes());
+        Ok(())
+    }
+}
+
+impl TryFixValue for [u8] {
+    type Error = FixError;
+
+    #[inline]
+    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
+        out.extend_from_slice(self);
+        Ok(())
+    }
 }
 
 /// Marker trait: values suitable for FIX tag 34 (MsgSeqNum).
@@ -32,6 +86,7 @@ impl FixSeqNum for i64 {}
 
 /// Marker trait: values suitable for FIX tag 52 (SendingTime, UTCTimestamp format).
 pub trait FixSendingTime {
+    /// Encode the sending time into `out` (YYYYMMDD-HH:MM:SS.mmm).
     fn encode_sending_time(&self, out: &mut Vec<u8>);
 }
 
@@ -43,7 +98,7 @@ impl FixSendingTime for DateTime<Utc> {
     }
 }
 
-/// FixSendingTime wrapper for a preformatted str
+/// FixSendingTime wrapper for a preformatted str.
 pub struct SendingTimeStr<'a>(pub &'a str);
 
 impl FixSendingTime for SendingTimeStr<'_> {
@@ -53,6 +108,7 @@ impl FixSendingTime for SendingTimeStr<'_> {
     }
 }
 
+/// FixSendingTime wrapper for preformatted bytes.
 pub struct SendingTimeBytes<'a>(pub &'a [u8]);
 
 impl FixSendingTime for SendingTimeBytes<'_> {
@@ -64,6 +120,7 @@ impl FixSendingTime for SendingTimeBytes<'_> {
 
 /// Convenience trait for enums that map to a static FIX code ("D", "1", "2", ...).
 pub trait AsFixStr {
+    /// Return the static FIX code for this value.
     fn as_fix_str(&self) -> &'static str;
 }
 
@@ -393,36 +450,62 @@ fn push_checksum_3(out: &mut Vec<u8>, cksum: u8) {
     out.push(b'0' + (cksum % 10));
 }
 
+/// Chainable message builder returned by `FixBuilder::begin_with`.
 #[must_use = "Call .finish() to finalize the message (writes 8/9 and 10= checksum)"]
 pub struct FixMsg<'a> {
     b: &'a mut FixBuilder,
 }
 
 impl<'a> FixMsg<'a> {
+    /// Append a field using a borrowed value.
     #[inline]
     pub fn field<V: FixValue + ?Sized>(self, tag: u32, value: &V) -> Self {
         kv(&mut self.b.buf, tag, value);
         self
     }
 
+    /// Append a field using an owned value.
     #[inline]
     pub fn field_owned<V: FixValue>(self, tag: u32, value: V) -> Self {
         kv(&mut self.b.buf, tag, &value);
         self
     }
 
+    /// Append a string field.
     #[inline]
     pub fn str(self, tag: u32, s: &str) -> Self {
         kv(&mut self.b.buf, tag, s);
         self
     }
 
+    /// Append a raw byte field.
     #[inline]
     pub fn bytes(self, tag: u32, b: &[u8]) -> Self {
         kv(&mut self.b.buf, tag, b);
         self
     }
 
+    /// Append a field using fallible encoding (currently only `f64` can fail).
+    #[inline]
+    pub fn try_field_ref<V>(self, tag: u32, value: &V) -> Result<Self, FixError>
+    where
+        V: TryFixValue<Error = FixError> + ?Sized,
+    {
+        try_kv(&mut self.b.buf, tag, value)?;
+        Ok(self)
+    }
+
+    /// Append a field using fallible encoding (currently only `f64` can fail).
+    #[inline]
+    pub fn try_field<V>(self, tag: u32, value: V) -> Result<Self, FixError>
+    where
+        V: TryFixValue<Error = FixError>,
+    {
+        try_kv(&mut self.b.buf, tag, &value)?;
+        Ok(self)
+    }
+
+    /// Add multiple fields using a writer (useful for optional/looped tags).
     #[inline]
     pub fn fields(self, f: impl FnOnce(&mut FixMsgWriter<'_>)) -> Self {
         let mut w = FixMsgWriter {
@@ -432,37 +515,65 @@ impl<'a> FixMsg<'a> {
         self
     }
 
+    /// Add multiple fields using a writer that can fail.
+    #[inline]
+    pub fn try_fields<F>(self, f: F) -> Result<Self, FixError>
+    where
+        F: FnOnce(&mut FixMsgWriter<'_>) -> Result<(), FixError>,
+    {
+        let mut w = FixMsgWriter {
+            buf: &mut self.b.buf,
+        };
+        f(&mut w)?;
+        Ok(self)
+    }
+
+    /// Finalize the message (writes header/body length/checksum) and return bytes.
     #[inline]
     pub fn finish(self) -> &'a [u8] {
         self.b.finish()
     }
 }
 
+/// Helper used by `fields`/`try_fields` to append fields to a message.
 pub struct FixMsgWriter<'a> {
     buf: &'a mut Vec<u8>,
 }
 
 impl<'a> FixMsgWriter<'a> {
+    /// Append a field using a borrowed value.
     #[inline]
     pub fn field<V: FixValue + ?Sized>(&mut self, tag: u32, v: &V) {
         kv(self.buf, tag, v);
     }
+    /// Append a field using fallible encoding (currently only `f64` can fail).
+    #[inline]
+    pub fn try_field<V>(&mut self, tag: u32, v: &V) -> Result<(), FixError>
+    where
+        V: TryFixValue<Error = FixError> + ?Sized,
+    {
+        try_kv(self.buf, tag, v)
+    }
 
+    /// Append a field using an owned value.
     #[inline]
     pub fn field_owned<V: FixValue>(&mut self, tag: u32, value: V) {
         kv(self.buf, tag, &value);
     }
 
+    /// Append a string field.
     #[inline]
     pub fn str(&mut self, tag: u32, s: &str) {
         kv(self.buf, tag, s);
     }
+    /// Append a raw byte field.
     #[inline]
     pub fn bytes(&mut self, tag: u32, b: &[u8]) {
         kv(self.buf, tag, b);
     }
 }
 
+/// Builder that encodes FIX messages into an internal buffer.
 pub struct FixBuilder {
     sender: Vec<u8>,
     target: Vec<u8>,
@@ -471,6 +582,7 @@ pub struct FixBuilder {
 }
 
 impl FixBuilder {
+    /// Create a builder with a default buffer capacity.
     pub fn new(
         fix_version: impl Into<String>,
         sender: impl Into<String>,
@@ -479,6 +591,7 @@ impl FixBuilder {
         Self::with_capacity(fix_version, sender, target, 1024)
     }
 
+    /// Create a builder with a specific buffer capacity.
     pub fn with_capacity(
         fix_version: impl Into<String>,
         sender: impl Into<String>,
@@ -583,6 +696,30 @@ fn kv<V: FixValue + ?Sized>(buf: &mut Vec<u8>, tag: u32, value: &V) {
 }
 
 #[inline]
+fn try_kv<V: TryFixValue<Error = FixError> + ?Sized>(
+    buf: &mut Vec<u8>,
+    tag: u32,
+    value: &V,
+) -> Result<(), FixError> {
+    let start = buf.len();
+    push_u64_ascii(buf, tag as u64);
+    buf.push(b'=');
+
+    if let Err(e) = value.try_encode(buf) {
+        buf.truncate(start);
+
+        // If the value used "tag=0" as a placeholder, attach the real tag here.
+        return Err(match e {
+            FixError::InvalidValue { tag: 0, ctx } => FixError::InvalidValue { tag, ctx },
+            other => other,
+        });
+    }
+
+    buf.push(SOH);
+    Ok(())
+}
+
+#[inline]
 fn kv_bytes(buf: &mut Vec<u8>, tag: u32, bytes: &[u8]) {
     push_u64_ascii(buf, tag as u64);
     buf.push(b'=');
@@ -602,6 +739,7 @@ const fn digits_00_99_u16() -> [u16; 100] {
     out
 }
 
+use crate::FixError;
 use core::ops::DivAssign;
 
 trait UnsignedDigits: Copy + PartialOrd + From<u8> + DivAssign<Self> {}
@@ -1114,5 +1252,20 @@ mod tests {
 
         verify_body_length(msg);
         verify_checksum(msg);
+    }
+
+    #[test]
+    fn try_field_f64_rejects_nan() {
+        let mut b = FixBuilder::new("FIX.4.2", "S", "T");
+        let dt = fixed_dt();
+        let seq = 1u32;
+        let mt = TestMsgType::NewOrderSingle;
+
+        let err = match b.begin_with(&seq, &dt, &mt).try_field_ref(44, &f64::NAN) {
+            Ok(_) => panic!("expected error"),
+            Err(e) => e,
+        };
+
+        assert!(matches!(err, FixError::InvalidValue { tag: 44, .. }));
     }
 }
