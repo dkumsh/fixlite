@@ -322,7 +322,7 @@ fn generate_field_parser(
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
         }
     } else {
-        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::InvalidValue(0))? }
+        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::invalid_value_ctx(#tag,value.as_bytes()))? }
     };
 
     quote! {
@@ -348,7 +348,7 @@ fn generate_group_parser(
     quote! {
         #tag => {
             let value = tags.next_value().unwrap();
-            let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::InvalidValue(#tag))?;
+            let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::invalid_value_ctx(#tag,value.as_bytes()))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
                 let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::deserialize_fields(tags, |tag| Self::is_known_tag(tag))?;

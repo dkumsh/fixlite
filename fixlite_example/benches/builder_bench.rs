@@ -26,31 +26,32 @@ fn bench_build_fix(c: &mut Criterion) {
 
     c.bench_function("build_fix NewOrderSingle", |b| {
         b.iter(|| {
-            builder.begin_with(&seq, &dt, &msg_type);
-            builder.field(1, &account);
-            builder.field(11, &cl_ord_id);
-            builder.field(21, &HandlInst::Automated);
-            builder.field(55, &symbol);
-            builder.field(54, &Side::Buy);
-            builder.field(38, &order_qty);
-            builder.field(40, &OrdType::Limit);
-            builder.field(44, &price);
-            builder.field(59, &TimeInForce::Day);
-            builder.field(60, &dt);
-            builder.field(100, "XNAS");
-            builder.field(15, "USD");
-            builder.field(167, &SecurityType::ForeignExchangeContract);
-            builder.field(114, &true);
-            builder.field(58, &text);
-            // Parties repeating group (453)
-            builder.field(453, &2u32);
-            builder.field(448, "PARTY1");
-            builder.field(447, "D");
-            builder.field(452, &1u32);
-            builder.field(448, "PARTY2");
-            builder.field(447, "D");
-            builder.field(452, &12u32);
-            let msg = builder.finish();
+            let msg = builder
+                .begin_with(&seq, &dt, &msg_type)
+                .field(1, &account)
+                .field(11, &cl_ord_id)
+                .field(21, &HandlInst::Automated)
+                .field(55, &symbol)
+                .field(54, &Side::Buy)
+                .field(38, &order_qty)
+                .field(40, &OrdType::Limit)
+                .field(44, &price)
+                .field(59, &TimeInForce::Day)
+                .field(60, &dt)
+                .field(100, "XNAS")
+                .field(15, "USD")
+                .field(167, &SecurityType::ForeignExchangeContract)
+                .field(114, &true)
+                .field(58, &text)
+                // Parties repeating group (453
+                .field(453, &2u32)
+                .field(448, "PARTY1")
+                .field(447, "D")
+                .field(452, &1u32)
+                .field(448, "PARTY2")
+                .field(447, "D")
+                .field(452, &12u32)
+                .finish();
             black_box(msg.len());
         });
     });

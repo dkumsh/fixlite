@@ -7,7 +7,7 @@ fixlite is a Rust crate for parsing and building FIX (Financial Information eXch
  * Customizable tag-to-type mappings through registries defined with fix_tag_registry!.
  * Compile-time validation of tag-type associations to ensure correctness.
  * Zero-copy deserialization for string fields defined as &str, enhancing performance by avoiding unnecessary allocations.
- * Message building with FixBuilder and the build_fix! macro.
+ * Message building with FixBuilder chaining (begin_with().field(...).finish()) and the build_fix! macro.
  * Trait-based field encoding via FixValue and AsFixStr for enums.
  * Optional BodyLength/CheckSum validation during parsing when the `checksum` feature is enabled.
 
@@ -39,6 +39,8 @@ To validate BodyLength and CheckSum during parsing, enable the `checksum` featur
 fixlite = { version = "...", features = ["checksum"] }
 ```
 
+With checksum enabled, malformed frames return `FixError::Malformed(MalformedFix::...)` while semantic parse errors return `FixError::InvalidValue`.
+
 ```rust
 use fixlite::FixDeserialize;
 
@@ -62,7 +64,36 @@ struct TestMessage<'a> {
 }
 ```
 ## Building FIX Messages
-Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically.
+Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder, and fields can be used for optional or looped tags.
+
+```rust
+use chrono::Utc;
+use fixlite::fix::{FixBuilder, HandlInst, MsgType, OrdType, Side, TimeInForce};
+
+let mut builder = FixBuilder::new("FIX.4.2", "BUYER", "SELLER");
+let dt = Utc::now();
+
+let extras = &[(58, "note"), (100, "XNAS")];
+
+let msg = builder
+    .begin_with(&2u64, &dt, &MsgType::NewOrderSingle)
+    .field(11, "123")
+    .field(21, &HandlInst::Automated)
+    .field(55, "IBM")
+    .field(54, &Side::Buy)
+    .field(38, &100u32)
+    .field(40, &OrdType::Limit)
+    .field(44, "150.25")
+    .field(59, &TimeInForce::Day)
+    .fields(|m| {
+        for &(tag, val) in extras {
+            m.str(tag, val);
+        }
+    })
+    .finish();
+```
+
+You can also use the build_fix! macro:
 
 ```rust
 use chrono::Utc;

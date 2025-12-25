@@ -1,5 +1,5 @@
 #[cfg(feature = "checksum")]
-use crate::FixError;
+use crate::{FixError, MalformedFix};
 
 pub struct TagCursor<'a> {
     s: &'a [u8],
@@ -150,29 +150,25 @@ impl<'a> TagCursor<'a> {
 
     #[cfg(feature = "checksum")]
     pub fn validate_checksum(&self) -> Result<(), FixError> {
-        let body_length = self
-            .body_length
-            .ok_or(FixError::MissingField("9[BodyLength]"))?;
-        let body_start = self
-            .body_start
-            .ok_or(FixError::MissingField("9[BodyLength]"))?;
-        let checksum_tag_start = self
-            .checksum_tag_start
-            .ok_or(FixError::MissingField("10[CheckSum]"))?;
-        let expected = self
-            .checksum_expected
-            .ok_or(FixError::MissingField("10[CheckSum]"))?;
+        let body_length = self.body_length.ok_or(MalformedFix::InvalidFormat)?; // missing 9 in a FIX stream
+
+        let body_start = self.body_start.ok_or(MalformedFix::InvalidFormat)?;
+
+        let checksum_tag_start = self.checksum_tag_start.ok_or(MalformedFix::InvalidFormat)?; // missing 10
+
+        let expected = self.checksum_expected.ok_or(MalformedFix::InvalidFormat)?;
 
         let actual_len = checksum_tag_start
             .checked_sub(body_start)
-            .ok_or(FixError::InvalidFixFormat)?;
+            .ok_or(MalformedFix::InvalidFormat)?;
+
         if actual_len != body_length as usize {
-            return Err(FixError::InvalidFixFormat);
+            return Err(MalformedFix::BodyLengthMismatch.into());
         }
 
         let actual_checksum = self.checksum_sum % 256;
         if expected != actual_checksum {
-            return Err(FixError::InvalidFixFormat);
+            return Err(MalformedFix::ChecksumMismatch.into());
         }
 
         Ok(())

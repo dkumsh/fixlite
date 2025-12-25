@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v0.3.27 - 2025-12-25
+### Changed
+- FixBuilder now returns a chainable message builder from `begin_with`, with an optional `fields` helper.
+- Error handling distinguishes malformed FIX frames from semantic invalid values, and includes value context.
+- `pub_fix_enum!` now takes numeric tag values (for example, `MsgType(35)`).
+- Refined FixBuilder f64 encoding rounding/carry behavior.
+- Reworked numeric encoding in FixBuilder, including fixed-precision f64 formatting and faster integer output.
+
+### Removed
+- ryu dependency (replaced by custom float encoding).
+
+## v0.3.26 - 2025-12-24
 ### Added
 - Optional single-pass BodyLength/CheckSum validation in `from_fix` behind the `checksum` feature flag.
 

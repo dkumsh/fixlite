@@ -7,12 +7,12 @@ const HEADER_SPACE: usize = 32; // bytes reserved for 8 & 9
 #[macro_export]
 macro_rules! build_fix {
     ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(, $tag:expr, $val:expr )* $(,)?) => {{
-        let builder = &mut $builder;
-        builder.begin_with(&$seq_out, &$dt, &$msg_type);
+        $builder
+            .begin_with(&$seq_out, &$dt, &$msg_type)
         $(
-            builder.field($tag as u32, &$val);
+            .field($tag as u32, &$val)
         )*
-        builder.finish()
+            .finish()
     }};
 }
 
@@ -169,7 +169,11 @@ impl FixValue for f64 {
 
             // IEEE-754: round to nearest, ties to even (banker's rounding)
             let scaled = fraction * (factor as f64);
-            let mut fraction = scaled.round() as u64;
+            let mut fraction = scaled.round();
+            if fraction <= 0.0 {
+                fraction = 0.0;
+            }
+            let mut fraction = fraction as u64;
 
             if fraction == factor {
                 if let Some(next) = whole.checked_add(1) {
@@ -278,7 +282,6 @@ fn push_2_u16(out: &mut Vec<u8>, pair: u16) {
     // Get 2 bytes of spare capacity
     let spare = out.spare_capacity_mut();
     let dst = &mut spare[..2];
-    debug_assert!(dst.len() >= 2);
 
     let bytes = pair.to_ne_bytes();
     dst[0].write(bytes[0]);
@@ -390,6 +393,76 @@ fn push_checksum_3(out: &mut Vec<u8>, cksum: u8) {
     out.push(b'0' + (cksum % 10));
 }
 
+#[must_use = "Call .finish() to finalize the message (writes 8/9 and 10= checksum)"]
+pub struct FixMsg<'a> {
+    b: &'a mut FixBuilder,
+}
+
+impl<'a> FixMsg<'a> {
+    #[inline]
+    pub fn field<V: FixValue + ?Sized>(self, tag: u32, value: &V) -> Self {
+        kv(&mut self.b.buf, tag, value);
+        self
+    }
+
+    #[inline]
+    pub fn field_owned<V: FixValue>(self, tag: u32, value: V) -> Self {
+        kv(&mut self.b.buf, tag, &value);
+        self
+    }
+
+    #[inline]
+    pub fn str(self, tag: u32, s: &str) -> Self {
+        kv(&mut self.b.buf, tag, s);
+        self
+    }
+
+    #[inline]
+    pub fn bytes(self, tag: u32, b: &[u8]) -> Self {
+        kv(&mut self.b.buf, tag, b);
+        self
+    }
+
+    #[inline]
+    pub fn fields(self, f: impl FnOnce(&mut FixMsgWriter<'_>)) -> Self {
+        let mut w = FixMsgWriter {
+            buf: &mut self.b.buf,
+        };
+        f(&mut w);
+        self
+    }
+
+    #[inline]
+    pub fn finish(self) -> &'a [u8] {
+        self.b.finish()
+    }
+}
+
+pub struct FixMsgWriter<'a> {
+    buf: &'a mut Vec<u8>,
+}
+
+impl<'a> FixMsgWriter<'a> {
+    #[inline]
+    pub fn field<V: FixValue + ?Sized>(&mut self, tag: u32, v: &V) {
+        kv(self.buf, tag, v);
+    }
+
+    #[inline]
+    pub fn field_owned<V: FixValue>(&mut self, tag: u32, value: V) {
+        kv(self.buf, tag, &value);
+    }
+
+    #[inline]
+    pub fn str(&mut self, tag: u32, s: &str) {
+        kv(self.buf, tag, s);
+    }
+    #[inline]
+    pub fn bytes(&mut self, tag: u32, b: &[u8]) {
+        kv(self.buf, tag, b);
+    }
+}
+
 pub struct FixBuilder {
     sender: Vec<u8>,
     target: Vec<u8>,
@@ -421,7 +494,7 @@ impl FixBuilder {
     }
 
     /// Begin a message with explicit seq/time (session layer supplies seq + dt).
-    pub fn begin_with<MT, SEQ, TS>(&mut self, seq_out: &SEQ, dt: &TS, msg_type: &MT)
+    pub fn begin_with<MT, SEQ, TS>(&mut self, seq_out: &SEQ, dt: &TS, msg_type: &MT) -> FixMsg<'_>
     where
         MT: FixValue + ?Sized,
         SEQ: FixSeqNum + ?Sized,
@@ -440,11 +513,7 @@ impl FixBuilder {
         buf.push(b'=');
         dt.encode_sending_time(buf);
         buf.push(SOH);
-    }
-
-    #[inline]
-    pub fn field<V: FixValue + ?Sized>(&mut self, tag: u32, value: &V) {
-        kv(&mut self.buf, tag, value);
+        FixMsg { b: self }
     }
 
     /// Finalize: patch 8/9, compute checksum, append 10, return the message bytes.
@@ -844,12 +913,14 @@ mod tests {
         let seq = 7u32;
         let mt = TestMsgType::NewOrderSingle;
 
-        b.begin_with(&seq, &dt, &mt);
-        b.field(11, &ClientOrderId(123));
-        b.field(21, &HandlInst::Automated);
-        b.field(40, &OrdType::Limit);
-
-        let msg = b.finish();
+        let msg = b
+            .begin_with(&seq, &dt, &mt)
+            .fields(|m| {
+                m.field_owned(11, ClientOrderId(123));
+                m.field_owned(21, HandlInst::Automated);
+                m.field_owned(40, OrdType::Limit);
+            })
+            .finish();
 
         assert!(msg.starts_with(b"8=FIX.4.2\x01"), "Missing BeginString");
         assert_eq!(find_field(msg, 35).unwrap(), b"D");
@@ -875,13 +946,13 @@ mod tests {
             scale: 2,
         };
 
-        b.begin_with(&seq, &dt, &mt);
-        b.field(11, &cl);
-        b.field(21, &HandlInst::Automated);
-        b.field(40, &OrdType::Limit);
-        b.field(44, &px);
-
-        let msg = b.finish();
+        let msg = b
+            .begin_with(&seq, &dt, &mt)
+            .field_owned(11, cl)
+            .field_owned(21, HandlInst::Automated)
+            .field_owned(40, OrdType::Limit)
+            .field_owned(44, px)
+            .finish();
 
         assert_eq!(find_field(msg, 11).unwrap(), b"999001");
         assert_eq!(find_field(msg, 21).unwrap(), b"1");
@@ -900,15 +971,16 @@ mod tests {
         let mt = TestMsgType::NewOrderSingle;
 
         let seq1 = 1u32;
-        b.begin_with(&seq1, &dt, &mt);
-        b.field(9999, "LEAKME");
-        let msg1 = b.finish();
+        let msg1 = b.begin_with(&seq1, &dt, &mt).field(9999, "LEAKME").finish();
+
         assert!(find_field(msg1, 9999).is_some());
 
         let seq2 = 2u32;
-        b.begin_with(&seq2, &dt, &mt);
-        b.field(11, &ClientOrderId(1));
-        let msg2 = b.finish();
+        let msg2 = b
+            .begin_with(&seq2, &dt, &mt)
+            .field(11, &ClientOrderId(1))
+            .finish();
+
         assert!(
             find_field(msg2, 9999).is_none(),
             "Field leaked across messages"
@@ -957,13 +1029,13 @@ mod tests {
         let price: FixPrice = "123.4500".parse().unwrap();
         let day = FixDayOfMonth(7);
 
-        b.begin_with(&seq, &dt, &mt);
-        b.field(21, &FixHandlInst::Automated);
-        b.field(40, &FixOrdType::Limit);
-        b.field(44, &price);
-        b.field(205, &day);
-
-        let msg = b.finish();
+        let msg = b
+            .begin_with(&seq, &dt, &mt)
+            .field_owned(21, FixHandlInst::Automated)
+            .field_owned(40, FixOrdType::Limit)
+            .field_owned(44, price)
+            .field_owned(205, day)
+            .finish();
 
         let parsed = <RoundTripMessage as crate::FixDeserialize>::from_fix(msg).unwrap();
         assert_eq!(parsed.begin_string, "FIX.4.2");
@@ -984,6 +1056,61 @@ mod tests {
             parsed.checksum as u32,
             parse_u32_ascii(find_field(msg, 10).unwrap())
         );
+
+        verify_body_length(msg);
+        verify_checksum(msg);
+    }
+
+    #[test]
+    fn fields_closure_is_nicer_for_conditionals_and_loops() {
+        let mut b = FixBuilder::new("FIX.4.2", "S", "T");
+
+        let dt = fixed_dt();
+        let seq = 100u32;
+        let mt = TestMsgType::NewOrderSingle;
+
+        // pretend these come from a higher layer:
+        let cl_ord_id = Some(ClientOrderId(777));
+        let account: Option<&str> = None;
+
+        // “extras” are dynamic (e.g. strategy tags / venue-specific tags)
+        let extras: &[(u32, &str)] = &[
+            (58, "hello"), // Text
+            (100, "XNAS"), // ExDestination
+            (110, "1"),    // MinQty
+        ];
+
+        let msg = b
+            .begin_with(&seq, &dt, &mt)
+            // fields() is most ergonomic when you want to:
+            // - conditionally add fields (lots of if let / match)
+            // - loop over collections (repeating groups / “optional extras”)
+            // - avoid repeating .field(...) chains that get ugly with branching
+            .fields(|m| {
+                // required-ish fields
+                m.field(21, &HandlInst::Automated);
+                m.field(40, &OrdType::Limit);
+
+                // conditional fields without breaking the flow
+                if let Some(cl) = &cl_ord_id {
+                    m.field(11, cl);
+                }
+                if let Some(acct) = account {
+                    m.str(1, acct); // Account(1)
+                }
+
+                // looped/dynamic fields (nice for repeating groups / “extras”)
+                for &(tag, val) in extras {
+                    m.str(tag, val);
+                }
+            })
+            .finish();
+
+        // spot-check a couple fields exist
+        assert_eq!(find_field(msg, 34).unwrap(), b"100");
+        assert_eq!(find_field(msg, 11).unwrap(), b"777");
+        assert_eq!(find_field(msg, 58).unwrap(), b"hello");
+        assert_eq!(find_field(msg, 100).unwrap(), b"XNAS");
 
         verify_body_length(msg);
         verify_checksum(msg);

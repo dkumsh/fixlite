@@ -3,6 +3,7 @@ mod price;
 pub mod tag;
 
 pub use crate::FixError;
+use crate::MalformedFix;
 pub use crate::fix::builder::{AsFixStr, FixBuilder, FixSendingTime, FixSeqNum, FixValue, SOH};
 pub use crate::fix::price::{FixedPrice, Price};
 use std::convert::TryFrom;
@@ -14,9 +15,9 @@ pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType
     let delimiter = delimiter.unwrap_or(b'\x01');
     for field in fix_message.split(|c| *c == delimiter) {
         let mut parts = field.splitn(2, |c| *c == b'=');
-        let tag = parts.next().ok_or(FixError::InvalidMessage)?;
+        let tag = parts.next().ok_or(MalformedFix::InvalidMessage)?;
         if tag == b"35" {
-            let value = parts.next().ok_or(FixError::InvalidValue(35))?;
+            let value = parts.next().ok_or(FixError::invalid_value(35))?;
             let value = std::str::from_utf8(value)?;
             return MsgType::from_str(value);
         }
@@ -98,7 +99,7 @@ impl fmt::Debug for DayOfMonth {
 /// ```
 macro_rules! pub_fix_enum {
     (
-        $enum_name:ident ( $tag:literal ) {
+        $enum_name:ident ( $tag_num:literal ) {
             $($variant:ident = $str_val:literal),* $(,)?
         }
     ) => {
@@ -112,7 +113,7 @@ macro_rules! pub_fix_enum {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
                     $( $str_val => Ok($enum_name::$variant), )*
-                    _ => Err(FixError::InvalidEnumValue(concat!($tag, "(", stringify!($enum_name), ")"))),
+                    _ => Err(FixError::invalid_enum_value($tag_num, stringify!($enum_name))),
                 }
             }
         }
@@ -149,20 +150,20 @@ macro_rules! pub_fix_enum {
 
 // FIX enum definitions
 pub_fix_enum! {
-    ExecTransType("20") {
+    ExecTransType(20) {
         New     = "0",
         Cancel  = "1",
         Correct = "2",
         Status  = "3",
 }}
 pub_fix_enum! {
-    HandlInst("21") {
+    HandlInst(21) {
         Automated                           = "1",
         AutomatedPublicBrokerInterventionOk = "2",
         Manual                              = "3",
 }}
 pub_fix_enum! {
-    SecurityIDSource("22") {
+    SecurityIDSource(22) {
         CUSIP                          = "1",
         SEDOL                          = "2",
         QUIK                           = "3",
@@ -184,7 +185,7 @@ pub_fix_enum! {
         OPRA                           = "J",
 }}
 pub_fix_enum! {
-    MsgType("35"){
+    MsgType(35){
         Heartbeat = "0",
         TestRequest = "1",
         ResendRequest = "2",
@@ -246,7 +247,7 @@ pub_fix_enum! {
         DerivativeSecurityListRequest = "z",
 }}
 pub_fix_enum! {
-    OrdStatus("39") {
+    OrdStatus(39) {
         New             = "0",
         PartiallyFilled = "1",
         Filled          = "2",
@@ -262,7 +263,7 @@ pub_fix_enum! {
         Expired         = "C",
 }}
 pub_fix_enum! {
-    OrdType("40") {
+    OrdType(40) {
         Market                       = "1",
         Limit                        = "2",
         Stop                         = "3",
@@ -279,12 +280,12 @@ pub_fix_enum! {
         MarketWithLeftoverAsLimit    = "K",
 }}
 pub_fix_enum! {
-    Side("54"){
+    Side(54){
         Buy = "1",
         Sell = "2",
 }}
 pub_fix_enum! {
-    TimeInForce("59") {
+    TimeInForce(59) {
         Day               = "0",
         GoodTillCancel    = "1",
         AtTheOpening      = "2",
@@ -295,17 +296,17 @@ pub_fix_enum! {
         AtTheClose        = "7",
 }}
 pub_fix_enum! {
-    GapFillFlag("123"){
+    GapFillFlag(123){
         Yes = "Y",
         No = "N",
 }}
 pub_fix_enum! {
-    ResetSeqNumFlag("141"){
+    ResetSeqNumFlag(141){
         Yes = "Y",
         No = "N",
 }}
 pub_fix_enum! {
-    ExecType("150") {
+    ExecType(150) {
         New            = "0",
         PartialFill    = "1",
         Fill           = "2",
@@ -327,7 +328,7 @@ pub_fix_enum! {
         OrderStatus    = "I",
 }}
 pub_fix_enum! {
-    SecurityType("167") {
+    SecurityType(167) {
         // Agency group
         Agency                              = "AGENCY",
         EuroSupranationalCoupons            = "EUSUPRA",
@@ -450,18 +451,18 @@ pub_fix_enum! {
         Wildcard                            = "?",
 }}
 pub_fix_enum! {
-    SubscriptionRequestType("263"){
+    SubscriptionRequestType(263){
         Snapshot = "0",
         Subscribe = "1",
         Unsubscribe = "2"
 }}
 pub_fix_enum! {
-    MDUpdateType ("265"){
+    MDUpdateType (265){
         FullRefresh = "0",
         IncrementalRefresh = "1",
 }}
 pub_fix_enum! {
-    MDEntryType("269") {
+    MDEntryType(269) {
         Bid                         = "0",
         Offer                       = "1",
         Trade                       = "2",
@@ -477,13 +478,13 @@ pub_fix_enum! {
         OpenInterest                = "C",
 }}
 pub_fix_enum! {
-    MDUpdateAction("279"){
+    MDUpdateAction(279){
         New = "0",
         Change = "1",
         Delete = "2",
 }}
 pub_fix_enum! {
-    MDReqRejReason("281"){
+    MDReqRejReason(281){
         UnknownSymbol = "0",
         DuplicateMDReqID = "1",
         InsufficientBandwidth = "2",
@@ -500,14 +501,14 @@ pub_fix_enum! {
         Insufficientcredit = "D",
 }}
 pub_fix_enum! {
-    SecurityRequestType("321") {
+    SecurityRequestType(321) {
         RequestSecurityIdentityAndSpecifications       = "0",
         RequestSecurityIdentityForProvidedSpecifications = "1",
         RequestListSecurityTypes                        = "2",
         RequestListSecurities                           = "3",
 }}
 pub_fix_enum! {
-    SecurityResponseType("323") {
+    SecurityResponseType(323) {
         AcceptSecurityProposalAsIs                = "1",
         AcceptSecurityProposalWithRevisions       = "2",
         ListOfSecurityTypesReturned               = "3", // FIX 4.2/4.3 only
@@ -516,7 +517,7 @@ pub_fix_enum! {
         CannotMatchSelectionCriteria              = "6",
 }}
 pub_fix_enum! {
-    SessionRejectReason("373") {
+    SessionRejectReason(373) {
         InvalidTagNumber                         = "0",
         RequiredTagMissing                       = "1",
         TagNotDefinedForThisMessageType          = "2",
@@ -539,7 +540,7 @@ pub_fix_enum! {
 }}
 
 pub_fix_enum! {
-    CxlRejResponseTo ("434") {
+    CxlRejResponseTo (434) {
         CancelRequest  = "1",
         ReplaceRequest = "2",
 }}

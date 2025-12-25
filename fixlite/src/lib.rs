@@ -6,28 +6,76 @@ extern crate self as fixlite;
 
 use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum FixError {
-    #[error("Invalid FIX message")]
+/// Wire-format / framing errors (checksum, body length, missing separators, etc.).
+#[derive(Error, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MalformedFix {
+    #[error("Invalid FIX message framing")]
     InvalidMessage,
-    #[error("Invalid value for tag {0}")]
-    InvalidValue(u32),
-    #[error("Invalid tag {0}")]
-    InvalidTag(u32),
-    #[error("Invalid fix format")]
-    InvalidFixFormat,
-    #[error("Invalid enum value for tag {0}")]
-    InvalidEnumValue(&'static str),
-    #[error("Missing required field {0}")]
-    MissingField(&'static str),
+    #[error("Invalid FIX format")]
+    InvalidFormat,
     #[error("Missing separator")]
     MissingSeparator,
+    #[error("BodyLength mismatch")]
+    BodyLengthMismatch,
+    #[error("Checksum mismatch")]
+    ChecksumMismatch,
+}
+
+#[derive(Error, Debug)]
+pub enum FixError {
+    /// Wire-format/parsing failures (these mean the byte stream is malformed).
+    #[error("{0}")]
+    Malformed(#[from] MalformedFix),
+
+    /// Semantic/typing failures (message is well-formed but doesn't match expected schema).
+    #[error("Invalid value for tag {tag}{ctx}")]
+    InvalidValue { tag: u32, ctx: String },
+
+    #[error("Invalid tag {0}")]
+    InvalidTag(u32),
+
+    #[error("Invalid enum value for tag {tag} ({ty})")]
+    InvalidEnumValue {
+        tag: u32,
+        /// Enum type name (or tag name) for debugging.
+        ty: &'static str,
+    },
+    #[error("Missing required field {0}")]
+    MissingField(&'static str),
     #[error("UTF-8 parsing error")]
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("DateTime parsing error")]
     DateTimeError(#[from] chrono::ParseError),
 }
 
+impl FixError {
+    #[inline]
+    pub fn invalid_value(tag: u32) -> Self {
+        Self::InvalidValue {
+            tag,
+            ctx: String::new(),
+        }
+    }
+
+    #[inline]
+    pub fn invalid_value_ctx(tag: u32, bytes: &[u8]) -> Self {
+        const MAX: usize = 48;
+        let mut s = String::from_utf8_lossy(bytes).into_owned();
+        if s.len() > MAX {
+            s.truncate(MAX);
+            s.push('…');
+        }
+        Self::InvalidValue {
+            tag,
+            ctx: format!(" (value: {s})"),
+        }
+    }
+
+    #[inline]
+    pub fn invalid_enum_value(tag: u32, ty: &'static str) -> Self {
+        Self::InvalidEnumValue { tag, ty }
+    }
+}
 pub trait FixDeserialize<'fix>: Sized {
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let mut cur = TagCursor::new(fix_message, b'\x01');
@@ -50,6 +98,7 @@ pub trait FixDeserialize<'fix>: Sized {
 #[cfg(all(test, feature = "checksum"))]
 mod checksum_tests {
     use super::{FixDeserialize, FixError};
+    use crate::MalformedFix;
     use crate::fix::{FixBuilder, MsgType};
     use chrono::{TimeZone, Utc};
 
@@ -64,9 +113,11 @@ mod checksum_tests {
         let dt = Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap();
         let seq = 1u32;
 
-        builder.begin_with(&seq, &dt, &MsgType::NewOrderSingle);
-        builder.field(11, "ABC");
-        builder.finish().to_vec()
+        builder
+            .begin_with(&seq, &dt, &MsgType::NewOrderSingle)
+            .str(11, "ABC")
+            .finish()
+            .to_vec()
     }
 
     fn find_tag_range(msg: &[u8], tag: &[u8]) -> Option<(usize, usize, usize)> {
@@ -116,7 +167,11 @@ mod checksum_tests {
         msg[last] = if msg[last] == b'0' { b'1' } else { b'0' };
 
         let err = ChecksumMessage::from_fix(&msg).unwrap_err();
-        assert!(matches!(err, FixError::InvalidFixFormat));
+        assert!(matches!(
+            err,
+            FixError::Malformed(MalformedFix::ChecksumMismatch)
+                | FixError::Malformed(MalformedFix::InvalidFormat)
+        ));
     }
 
     #[test]
@@ -130,6 +185,10 @@ mod checksum_tests {
         update_checksum(&mut msg);
 
         let err = ChecksumMessage::from_fix(&msg).unwrap_err();
-        assert!(matches!(err, FixError::InvalidFixFormat));
+        assert!(matches!(
+            err,
+            FixError::Malformed(MalformedFix::BodyLengthMismatch)
+                | FixError::Malformed(MalformedFix::InvalidFormat)
+        ));
     }
 }
