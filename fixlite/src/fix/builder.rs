@@ -14,7 +14,7 @@ macro_rules! build_fix {
         $builder
             .begin_with(&$seq_out, &$dt, &$msg_type)
         $(
-            .field($tag as u32, &$val)
+            .field_ref($tag as u32, &$val)
         )*
             .finish()
     }};
@@ -41,37 +41,12 @@ impl TryFixValue for f64 {
 
     #[inline]
     fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
-        let start = out.len();
-
-        // reuse existing fast encoder (may early-return and write nothing)
-        self.encode(out);
-
-        if out.len() == start {
-            // placeholder: we don't know the tag here; try_kv() will patch it
-            return Err(FixError::invalid_value(0));
+        if encode_f64_checked(*self, out) {
+            Ok(())
+        } else {
+            // tag=0 placeholder; try_kv() patches it to the actual tag
+            Err(FixError::invalid_value(0))
         }
-
-        Ok(())
-    }
-}
-
-impl TryFixValue for str {
-    type Error = FixError;
-
-    #[inline]
-    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
-        out.extend_from_slice(self.as_bytes());
-        Ok(())
-    }
-}
-
-impl TryFixValue for [u8] {
-    type Error = FixError;
-
-    #[inline]
-    fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
-        out.extend_from_slice(self);
-        Ok(())
     }
 }
 
@@ -203,71 +178,80 @@ const DIGITS_U16: [u16; 100] = digits_00_99_u16();
 impl FixValue for f64 {
     #[inline]
     fn encode(&self, out: &mut Vec<u8>) {
-        if !self.is_finite() {
-            return;
-        }
-        let mut value = *self;
-        if value < 0.0 {
-            out.push(b'-');
-            value = -value;
-        }
-        let whole = value as u64;
-        let len = out.len();
-        push_u64_ascii(out, whole);
-        let wd = if whole != 0 {
-            (out.len() - len) as u32
-        } else {
-            0
-        };
+        // infallible path: ("write nothing" == skip)
+        let _ = encode_f64_checked(*self, out);
+    }
+}
 
-        if wd < 15 {
-            let mut factor = 10u64.pow(15 - wd);
-            let fraction = value - whole as f64;
+#[inline]
+fn encode_f64_checked(mut value: f64, out: &mut Vec<u8>) -> bool {
+    let start = out.len();
+    if !value.is_finite() {
+        return false;
+    }
+    if value < 0.0 {
+        out.push(b'-');
+        value = -value;
+    }
+    let whole = value as u64;
+    let len = out.len();
+    push_u64_ascii(out, whole);
+    let wd = if whole != 0 {
+        (out.len() - len) as u32
+    } else {
+        0
+    };
 
-            // IEEE-754: round to nearest, ties to even (banker's rounding)
-            let scaled = fraction * (factor as f64);
-            let mut fraction = scaled.round();
-            if fraction <= 0.0 {
-                fraction = 0.0;
+    if wd < 15 {
+        let mut factor = 10u64.pow(15 - wd);
+        let fraction = value - whole as f64;
+
+        // IEEE-754: round to nearest, ties to even (banker's rounding)
+        let scaled = fraction * (factor as f64);
+        let mut fraction = scaled.round();
+        if fraction <= 0.0 {
+            fraction = 0.0;
+        }
+        let mut fraction = fraction as u64;
+
+        if fraction == factor {
+            if let Some(next) = whole.checked_add(1) {
+                out.truncate(len); // rewind to before writing whole
+                push_u64_ascii(out, next);
             }
-            let mut fraction = fraction as u64;
+            // else: whole == u64::MAX, cannot carry; keep already-written whole
+            return true;
+        }
 
-            if fraction == factor {
-                if let Some(next) = whole.checked_add(1) {
-                    out.truncate(len); // rewind to before writing whole
-                    push_u64_ascii(out, next);
+        if fraction > 0 {
+            out.push(b'.');
+            while fraction > 0 {
+                let n: usize; // 0..100 (index into DIGITS_U16)
+
+                if factor >= 100 {
+                    factor /= 100;
+                    n = (fraction / factor) as usize;
+                    fraction %= factor;
+                } else if factor == 10 {
+                    n = (fraction as usize) * 10;
+                    fraction = 0;
+                } else {
+                    n = fraction as usize;
+                    fraction = 0;
                 }
-                // else: whole == u64::MAX, cannot carry; keep already-written whole
-                return;
-            }
-
-            if fraction > 0 {
-                out.push(b'.');
-                while fraction > 0 {
-                    let n: usize; // 0..100 (index into DIGITS_U16)
-
-                    if factor >= 100 {
-                        factor /= 100;
-                        n = (fraction / factor) as usize;
-                        fraction %= factor;
-                    } else if factor == 10 {
-                        n = (fraction as usize) * 10;
-                        fraction = 0;
-                    } else {
-                        n = fraction as usize;
-                        fraction = 0;
-                    }
-                    let pair = DIGITS_U16[n];
-                    let [tens, ones] = pair.to_ne_bytes();
-                    if fraction > 0 || ones != b'0' {
-                        push_2_u16(out, pair);
-                    } else {
-                        out.push(tens);
-                    }
+                let pair = DIGITS_U16[n];
+                let [tens, ones] = pair.to_ne_bytes();
+                if fraction > 0 || ones != b'0' {
+                    push_2_u16(out, pair);
+                } else {
+                    out.push(tens);
                 }
             }
         }
     }
+
+    // written if we appended anything at all
+    out.len() != start
 }
 
 /// FIX timestamp format: YYYYMMDD-HH:MM:SS.mmm
@@ -457,17 +441,17 @@ pub struct FixMsg<'a> {
 }
 
 impl<'a> FixMsg<'a> {
-    /// Append a field using a borrowed value.
+    /// Append a field using an owned value.
     #[inline]
-    pub fn field<V: FixValue + ?Sized>(self, tag: u32, value: &V) -> Self {
-        kv(&mut self.b.buf, tag, value);
+    pub fn field<V: FixValue>(self, tag: u32, value: V) -> Self {
+        kv(&mut self.b.buf, tag, &value);
         self
     }
 
-    /// Append a field using an owned value.
+    /// Append a field using a borrowed value.
     #[inline]
-    pub fn field_owned<V: FixValue>(self, tag: u32, value: V) -> Self {
-        kv(&mut self.b.buf, tag, &value);
+    pub fn field_ref<V: FixValue + ?Sized>(self, tag: u32, value: &V) -> Self {
+        kv(&mut self.b.buf, tag, value);
         self
     }
 
@@ -487,21 +471,21 @@ impl<'a> FixMsg<'a> {
 
     /// Append a field using fallible encoding (currently only `f64` can fail).
     #[inline]
-    pub fn try_field_ref<V>(self, tag: u32, value: &V) -> Result<Self, FixError>
-    where
-        V: TryFixValue<Error = FixError> + ?Sized,
-    {
-        try_kv(&mut self.b.buf, tag, value)?;
-        Ok(self)
-    }
-
-    /// Append a field using fallible encoding (currently only `f64` can fail).
-    #[inline]
     pub fn try_field<V>(self, tag: u32, value: V) -> Result<Self, FixError>
     where
         V: TryFixValue<Error = FixError>,
     {
         try_kv(&mut self.b.buf, tag, &value)?;
+        Ok(self)
+    }
+
+    /// Append a field using fallible encoding (currently only `f64` can fail).
+    #[inline]
+    pub fn try_field_ref<V>(self, tag: u32, value: &V) -> Result<Self, FixError>
+    where
+        V: TryFixValue<Error = FixError> + ?Sized,
+    {
+        try_kv(&mut self.b.buf, tag, value)?;
         Ok(self)
     }
 
@@ -541,24 +525,34 @@ pub struct FixMsgWriter<'a> {
 }
 
 impl<'a> FixMsgWriter<'a> {
+    /// Append a field using an owned value.
+    #[inline]
+    pub fn field<V: FixValue>(&mut self, tag: u32, value: V) {
+        kv(self.buf, tag, &value);
+    }
+
     /// Append a field using a borrowed value.
     #[inline]
-    pub fn field<V: FixValue + ?Sized>(&mut self, tag: u32, v: &V) {
+    pub fn field_ref<V: FixValue + ?Sized>(&mut self, tag: u32, v: &V) {
         kv(self.buf, tag, v);
     }
-    /// Append a field using fallible encoding (currently only `f64` can fail).
+
+    /// Append a field by value using fallible encoding (currently only `f64` can fail).
     #[inline]
-    pub fn try_field<V>(&mut self, tag: u32, v: &V) -> Result<(), FixError>
+    pub fn try_field<V>(&mut self, tag: u32, v: V) -> Result<(), FixError>
+    where
+        V: TryFixValue<Error = FixError>,
+    {
+        try_kv(self.buf, tag, &v)
+    }
+
+    /// Append a field by reference using fallible encoding (currently only `f64` can fail).
+    #[inline]
+    pub fn try_field_ref<V>(&mut self, tag: u32, v: &V) -> Result<(), FixError>
     where
         V: TryFixValue<Error = FixError> + ?Sized,
     {
         try_kv(self.buf, tag, v)
-    }
-
-    /// Append a field using an owned value.
-    #[inline]
-    pub fn field_owned<V: FixValue>(&mut self, tag: u32, value: V) {
-        kv(self.buf, tag, &value);
     }
 
     /// Append a string field.
@@ -1054,9 +1048,9 @@ mod tests {
         let msg = b
             .begin_with(&seq, &dt, &mt)
             .fields(|m| {
-                m.field_owned(11, ClientOrderId(123));
-                m.field_owned(21, HandlInst::Automated);
-                m.field_owned(40, OrdType::Limit);
+                m.field(11, ClientOrderId(123));
+                m.field(21, HandlInst::Automated);
+                m.field(40, OrdType::Limit);
             })
             .finish();
 
@@ -1086,10 +1080,10 @@ mod tests {
 
         let msg = b
             .begin_with(&seq, &dt, &mt)
-            .field_owned(11, cl)
-            .field_owned(21, HandlInst::Automated)
-            .field_owned(40, OrdType::Limit)
-            .field_owned(44, px)
+            .field(11, cl)
+            .field(21, HandlInst::Automated)
+            .field(40, OrdType::Limit)
+            .field(44, px)
             .finish();
 
         assert_eq!(find_field(msg, 11).unwrap(), b"999001");
@@ -1109,14 +1103,14 @@ mod tests {
         let mt = TestMsgType::NewOrderSingle;
 
         let seq1 = 1u32;
-        let msg1 = b.begin_with(&seq1, &dt, &mt).field(9999, "LEAKME").finish();
+        let msg1 = b.begin_with(&seq1, &dt, &mt).str(9999, "LEAKME").finish();
 
         assert!(find_field(msg1, 9999).is_some());
 
         let seq2 = 2u32;
         let msg2 = b
             .begin_with(&seq2, &dt, &mt)
-            .field(11, &ClientOrderId(1))
+            .field(11, ClientOrderId(1))
             .finish();
 
         assert!(
@@ -1169,10 +1163,10 @@ mod tests {
 
         let msg = b
             .begin_with(&seq, &dt, &mt)
-            .field_owned(21, FixHandlInst::Automated)
-            .field_owned(40, FixOrdType::Limit)
-            .field_owned(44, price)
-            .field_owned(205, day)
+            .field(21, FixHandlInst::Automated)
+            .field(40, FixOrdType::Limit)
+            .field(44, price)
+            .field(205, day)
             .finish();
 
         let parsed = <RoundTripMessage as crate::FixDeserialize>::from_fix(msg).unwrap();
@@ -1226,11 +1220,11 @@ mod tests {
             // - avoid repeating .field(...) chains that get ugly with branching
             .fields(|m| {
                 // required-ish fields
-                m.field(21, &HandlInst::Automated);
-                m.field(40, &OrdType::Limit);
+                m.field(21, HandlInst::Automated);
+                m.field(40, OrdType::Limit);
 
                 // conditional fields without breaking the flow
-                if let Some(cl) = &cl_ord_id {
+                if let Some(cl) = cl_ord_id {
                     m.field(11, cl);
                 }
                 if let Some(acct) = account {

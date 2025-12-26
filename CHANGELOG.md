@@ -1,9 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-Target: v0.4.0
+## v0.4.1 - 2025-12-26
+### Changed
+- FixBuilder `field`/`try_field` now take owned values; use `field_ref`/`try_field_ref` for borrowed values.
+- f64 encoding now uses the shared checked helper from `TryFixValue` to keep behavior aligned.
 
+### Documentation
+- Updated README builder examples for owned/borrowed field APIs and fallible builder usage.
+
+## v0.4.0 - 2025-12-25
 ### Added
 - Fallible FixBuilder field APIs (`try_field`, `try_field_ref`, `try_fields`) plus `TryFixValue` for `f64` validation (NaN/inf now error).
 

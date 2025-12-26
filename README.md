@@ -7,7 +7,7 @@ fixlite is a Rust crate for parsing and building FIX (Financial Information eXch
  * Customizable tag-to-type mappings through registries defined with fix_tag_registry!.
  * Compile-time validation of tag-type associations to ensure correctness.
  * Zero-copy deserialization for string fields defined as &str, enhancing performance by avoiding unnecessary allocations.
- * Message building with FixBuilder chaining (begin_with().field(...).finish()) and the build_fix! macro.
+ * Message building with FixBuilder chaining (begin_with().field/field_ref(...).finish()) and the build_fix! macro.
  * Trait-based field encoding via FixValue and AsFixStr for enums.
  * Optional BodyLength/CheckSum validation during parsing when the `checksum` feature is enabled.
 
@@ -64,7 +64,7 @@ struct TestMessage<'a> {
 }
 ```
 ## Building FIX Messages
-Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder, and fields can be used for optional or looped tags. For fallible encoding (currently only `f64` rejects NaN/inf), use `try_field`/`try_field_ref` or `try_fields`, which return `Result`.
+Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder: use `field` for owned values, `field_ref` for borrowed values, and the `str`/`bytes` helpers for string/byte fields. For fallible encoding (currently only `f64` rejects NaN/inf), use `try_field`/`try_field_ref` or `try_fields`, which return `Result`.
 
 ```rust
 use chrono::Utc;
@@ -77,14 +77,14 @@ let extras = &[(58, "note"), (100, "XNAS")];
 
 let msg = builder
     .begin_with(&2u64, &dt, &MsgType::NewOrderSingle)
-    .field(11, "123")
-    .field(21, &HandlInst::Automated)
-    .field(55, "IBM")
-    .field(54, &Side::Buy)
-    .field(38, &100u32)
-    .field(40, &OrdType::Limit)
-    .field(44, "150.25")
-    .field(59, &TimeInForce::Day)
+    .str(11, "123")
+    .field(21, HandlInst::Automated)
+    .str(55, "IBM")
+    .field(54, Side::Buy)
+    .field(38, 100u32)
+    .field(40, OrdType::Limit)
+    .str(44, "150.25")
+    .field(59, TimeInForce::Day)
     .fields(|m| {
         for &(tag, val) in extras {
             m.str(tag, val);
@@ -100,7 +100,7 @@ let price = 150.25_f64;
 
 let msg = builder
     .begin_with(&2u64, &dt, &MsgType::NewOrderSingle)
-    .try_field_ref(44, &price)?
+    .try_field(44, price)?
     .finish();
 ```
 
