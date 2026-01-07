@@ -4,16 +4,30 @@ mod type_check;
 
 use crate::type_check::{IsTypeCompatible, is_str_ref};
 use proc_macro::TokenStream;
+use proc_macro_crate::{FoundCrate, crate_name};
+use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::{
     Attribute, Data, DeriveInput, Fields, GenericParam, Ident, Lifetime, Lit, Type, WherePredicate,
     parse_macro_input, parse_quote,
 };
 
+fn fixlite_path() -> proc_macro2::TokenStream {
+    match crate_name("fixlite") {
+        Ok(FoundCrate::Itself) => quote!(::fixlite),
+        Ok(FoundCrate::Name(name)) => {
+            let ident = Ident::new(&name.replace('-', "_"), Span::call_site());
+            quote!(::#ident)
+        }
+        Err(_) => quote!(::fixlite),
+    }
+}
+
 #[proc_macro_derive(FixDeserialize, attributes(fix, fix_group, fix_registry))]
 pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
+    let fixlite_path = fixlite_path();
     let registry_type = input
         .attrs
         .iter()
@@ -23,7 +37,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             quote! {#ident}
         })
         .unwrap_or_else(|| {
-            quote! {::fixlite::fix::tag::DefaultRegistry}
+            quote! {#fixlite_path::fix::tag::DefaultRegistry}
         });
     let mut assertions = Vec::new();
 
@@ -146,12 +160,20 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                     /* ---------- decide what kind of parser to inject ---------- */
                     if is_component {
                         // component
-                        let handler =
-                            generate_component_parser(field_name, field_type, &fix_lifetime);
+                        let handler = generate_component_parser(
+                            field_name,
+                            field_type,
+                            &fix_lifetime,
+                            &fixlite_path,
+                        );
                         component_handlers.push(handler);
 
                         // ⬇ NEW: we still need the field-check!
-                        field_checks.push(generate_field_check(field_name, field_type));
+                        field_checks.push(generate_field_check(
+                            field_name,
+                            field_type,
+                            &fixlite_path,
+                        ));
                     } else if let Some(tag) = tag_value {
                         // regular field or repeating-group
                         let tag: u32 = tag.parse().unwrap();
@@ -161,13 +183,19 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                                 field_type,
                                 tag,
                                 &fix_lifetime,
+                                &fixlite_path,
                             ));
                         } else {
                             // Generate code for regular field parsing.
-                            let parser = generate_field_parser(field_name, field_type, tag);
+                            let parser =
+                                generate_field_parser(field_name, field_type, tag, &fixlite_path);
                             field_parsers.push(parser);
                         }
-                        field_checks.push(generate_field_check(field_name, field_type));
+                        field_checks.push(generate_field_check(
+                            field_name,
+                            field_type,
+                            &fixlite_path,
+                        ));
                     }
                 }
             }
@@ -176,7 +204,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             let known_tags_len = known_tags.len();
             let known_tags_tokens = known_tags.iter().map(|tag| quote! { #tag });
 
-            let fix_module_path = quote!(::fixlite);
+            let fix_module_path = fixlite_path.clone();
 
             // Combine all parts into the final implementation.
             quote! {
@@ -261,7 +289,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         const #const_assert_fn_name: () = {
             const fn assert_allowed<T, const TAG: u32>()
             where
-                #registry_type: ::fixlite::fix::tag::AllowedType<TAG,T>,
+                #registry_type: #fixlite_path::fix::tag::AllowedType<TAG,T>,
             {}
             fn __assertions #user_lifetime_tokens () {
                 #(#assertions)*
@@ -304,6 +332,7 @@ fn generate_field_parser(
     field_name: &Ident,
     field_type: &Type,
     tag: u32,
+    fixlite_path: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
@@ -324,7 +353,7 @@ fn generate_field_parser(
             DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)}
         }
     } else {
-        quote! { value.parse::<#parse_into_type>().map_err(|_| ::fixlite::FixError::invalid_value_ctx(#tag,value.as_bytes()))? }
+        quote! { value.parse::<#parse_into_type>().map_err(|_| #fixlite_path::FixError::invalid_value_ctx(#tag,value.as_bytes()))? }
     };
 
     quote! {
@@ -340,6 +369,7 @@ fn generate_group_parser(
     field_type: &Type,
     tag: u32,
     fix_lifetime: &proc_macro2::TokenStream,
+    fixlite_path: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
@@ -350,10 +380,10 @@ fn generate_group_parser(
     quote! {
         #tag => {
             let value = tags.next_value().unwrap();
-            let group_count = value.parse::<usize>().map_err(|_| ::fixlite::FixError::invalid_value_ctx(#tag,value.as_bytes()))?;
+            let group_count = value.parse::<usize>().map_err(|_| #fixlite_path::FixError::invalid_value_ctx(#tag,value.as_bytes()))?;
             let mut entries = Vec::with_capacity(group_count);
             for _ in 0..group_count {
-                let entry = <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::deserialize_fields(tags, |tag| Self::is_known_tag(tag))?;
+                let entry = <#inner_type as #fixlite_path::FixDeserialize<#fix_lifetime>>::deserialize_fields(tags, |tag| Self::is_known_tag(tag))?;
                 entries.push(entry);
             }
             #field_var = Some(entries);
@@ -364,16 +394,17 @@ fn generate_component_parser(
     field_name: &Ident,
     field_type: &Type,
     fix_lifetime: &proc_macro2::TokenStream,
+    fixlite_path: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
     let inner_type = extract_inner_type(field_type, "Option").unwrap_or(field_type);
 
     quote! {
         if #field_var.is_none()
-           && <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>::is_known_tag(tag)
+           && <#inner_type as #fixlite_path::FixDeserialize<#fix_lifetime>>::is_known_tag(tag)
         {
             let value =
-                <#inner_type as ::fixlite::FixDeserialize<#fix_lifetime>>
+                <#inner_type as #fixlite_path::FixDeserialize<#fix_lifetime>>
                     ::deserialize_fields(tags, |t| Self::is_known_tag(t))?;
             #field_var = Some(value);
             continue;           // we already consumed the component’s fields
@@ -381,7 +412,11 @@ fn generate_component_parser(
     }
 }
 
-fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::TokenStream {
+fn generate_field_check(
+    field_name: &Ident,
+    field_type: &Type,
+    fixlite_path: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
 
     // Check if the field is optional (Option<T>)
@@ -402,7 +437,7 @@ fn generate_field_check(field_name: &Ident, field_type: &Type) -> proc_macro2::T
         }
     } else {
         quote! {
-            let #field_name = #field_var.ok_or(::fixlite::FixError::MissingField(stringify!(#field_name)))?;
+            let #field_name = #field_var.ok_or(#fixlite_path::FixError::MissingField(stringify!(#field_name)))?;
         }
     }
 }

@@ -39,6 +39,14 @@ Enable the derive macro:
 fixlite = { version = "...", features = ["derive"] }
 ```
 
+If you rename the dependency in `Cargo.toml`, the derive macro will still resolve it:
+
+```toml
+fix = { package = "fixlite", version = "...", features = ["derive"] }
+```
+
+No extra `use` alias is required in your code.
+
 To validate BodyLength and CheckSum during parsing, enable the `checksum` feature (optionally alongside `derive`):
 
 ```toml
