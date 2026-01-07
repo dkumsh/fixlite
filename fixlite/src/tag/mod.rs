@@ -1,4 +1,4 @@
-use crate::fix;
+use crate::{enums, fix};
 use chrono::{DateTime, Utc};
 
 /// tag::Registry is used to define mapping between FIX tags and their allowed Rust types.
@@ -72,7 +72,7 @@ fix_tag_registry! {
         132 => [f64, fix::Price],              // CashOrderQty
         133 => [f64, fix::Price],              // OrderQty2
         140 => [f64, fix::Price],              // PrevClosePx
-        141 => [u8, fix::ResetSeqNumFlag],     // ResetSeqNumFlag
+        141 => [u8, enums::ResetSeqNumFlag],   // ResetSeqNumFlag
         151 => [f64],                          // LeavesQty
         202 => [f64, fix::Price],              // StrikePrice
         231 => [f64],                          // ContractMultiplier
@@ -85,26 +85,26 @@ fix_tag_registry! {
         1208 => [f64],                         // TargetStrategyParameters
 
         // Enums
-        35  => [fix::MsgType],                 // MsgType
-        20  => [fix::ExecTransType],           // ExecTransType
-        21  => [fix::HandlInst],               // HandlInst
-        22  => [fix::SecurityIDSource],        // SecurityIDSource
-        39  => [fix::OrdStatus],               // OrdStatus
-        40  => [fix::OrdType],                 // OrdType
-        54  => [fix::Side],                    // Side
-        59  => [fix::TimeInForce],             // TimeInForce
-        150 => [fix::ExecType],                // ExecType
-        167 => [fix::SecurityType],            // SecurityType
-        263 => [fix::SubscriptionRequestType], // SubscriptionRequestType
+        35  => [enums::MsgType],                 // MsgType
+        20  => [enums::ExecTransType],           // ExecTransType
+        21  => [enums::HandlInst],               // HandlInst
+        22  => [enums::SecurityIDSource],        // SecurityIDSource
+        39  => [enums::OrdStatus],               // OrdStatus
+        40  => [enums::OrdType],                 // OrdType
+        54  => [enums::Side],                    // Side
+        59  => [enums::TimeInForce],             // TimeInForce
+        150 => [enums::ExecType],                // ExecType
+        167 => [enums::SecurityType],            // SecurityType
+        263 => [enums::SubscriptionRequestType], // SubscriptionRequestType
         205 => [u8, fix::DayOfMonth],          // MaturityDay
-        265 => [fix::MDUpdateType],            // MDUpdateType
-        269 => [fix::MDEntryType],             // MDEntryType
-        279 => [fix::MDUpdateAction],          // MDUpdateAction
-        281 => [fix::MDReqRejReason],          // MDReqRejReason
+        265 => [enums::MDUpdateType],          // MDUpdateType
+        269 => [enums::MDEntryType],           // MDEntryType
+        279 => [enums::MDUpdateAction],        // MDUpdateAction
+        281 => [enums::MDReqRejReason],        // MDReqRejReason
         314 => [u8, fix::DayOfMonth],          // UnderlyingMaturityDay
-        321 => [fix::SecurityRequestType],     // SecurityRequestType
-        323 => [fix::SecurityResponseType],    // SecurityResponseType
-        373 => [fix::SessionRejectReason],     // SessionRejectReason
+        321 => [enums::SecurityRequestType],   // SecurityRequestType
+        323 => [enums::SecurityResponseType],  // SecurityResponseType
+        373 => [enums::SessionRejectReason],   // SessionRejectReason
 
         // Checksum
         10  => [u8],                           // CheckSum

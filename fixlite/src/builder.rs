@@ -1,4 +1,4 @@
-use super::{DayOfMonth, price::FixedPrice};
+use crate::fix::{DayOfMonth, FixedPrice};
 use chrono::{DateTime, Datelike, Timelike, Utc};
 
 /// FIX field delimiter (SOH / 0x01).
@@ -771,10 +771,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fix::{
-        DayOfMonth as FixDayOfMonth, HandlInst as FixHandlInst, MsgType as FixMsgType,
-        OrdType as FixOrdType, Price as FixPrice,
-    };
+    use crate::enums::{HandlInst as FixHandlInst, MsgType as FixMsgType, OrdType as FixOrdType};
+    use crate::fix::{DayOfMonth as FixDayOfMonth, Price as FixPrice};
     use chrono::{TimeZone, Timelike};
 
     // ---- Test-only FIX types ----

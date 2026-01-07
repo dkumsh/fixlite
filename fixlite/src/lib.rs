@@ -1,6 +1,9 @@
+pub mod builder;
+pub mod enums;
 pub mod fix;
 mod scanner;
 pub mod tag;
+pub use crate::builder::{AsFixStr, FixBuilder, FixSendingTime, FixSeqNum, FixValue, SOH};
 #[doc(hidden)]
 pub mod __private {
     pub use crate::scanner::TagCursor;
@@ -110,8 +113,9 @@ pub trait FixDeserialize<'fix>: Sized {
 #[cfg(all(test, feature = "checksum"))]
 mod checksum_tests {
     use super::{FixDeserialize, FixError};
+    use crate::FixBuilder;
     use crate::MalformedFix;
-    use crate::fix::{FixBuilder, MsgType};
+    use crate::enums::MsgType;
     use chrono::{TimeZone, Utc};
 
     #[derive(Debug, fixlite_derive::FixDeserialize)]

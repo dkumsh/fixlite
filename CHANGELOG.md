@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `fixlite::tag::fix_tag_registry` re-export for registry macro access under the new module.
 - `fixlite::decode` helper for parsing without calling the trait method.
+- `fixlite::enums` module for FIX enum types.
+- `fix_enum!` macro (renamed from `pub_fix_enum!`).
 
 ### Changed
 - Tag/registry API moved to `fixlite::tag` (including `Registry`, `AllowedType`, `DefaultRegistry`).
+- FIX enums moved to `fixlite::enums`.
+- FixBuilder and builder traits moved to `fixlite::builder` (re-exported at crate root).
 
 ### Removed
 - Root-level `fixlite::TagCursor` re-export (internal type is now hidden under `fixlite::__private`).
 - `fixlite::fix::tag` module path (use `fixlite::tag` instead).
+- `pub_fix_enum!` macro (use `fix_enum!`).
+- `fixlite::fix::FixBuilder` path (use `fixlite::FixBuilder` or `fixlite::builder::FixBuilder`).
 
 ## v0.5.2 - 2026-01-07
 ### Added

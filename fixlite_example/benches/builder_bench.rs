@@ -2,9 +2,9 @@
 
 use chrono::{TimeZone, Timelike, Utc};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use fixlite::fix::{
-    FixBuilder, HandlInst, MsgType, OrdType, Price, SecurityType, Side, TimeInForce,
-};
+use fixlite::FixBuilder;
+use fixlite::enums::{HandlInst, MsgType, OrdType, SecurityType, Side, TimeInForce};
+use fixlite::fix::Price;
 
 fn bench_build_fix(c: &mut Criterion) {
     let mut builder = FixBuilder::new("FIX.4.2", "SENDER", "TARGET");

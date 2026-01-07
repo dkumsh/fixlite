@@ -4,8 +4,8 @@ pub mod fixparser;
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};
+    use fixlite::enums::MsgType;
     use fixlite::fix::DayOfMonth;
-    use fixlite::fix::MsgType;
     use fixlite::{FixDeserialize, fix_tag_registry};
 
     #[allow(dead_code)]
