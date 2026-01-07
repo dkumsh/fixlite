@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.5.2 - 2026-01-07
 ### Added
 - Derive macro now auto-detects the `fixlite` crate name, so renamed dependencies work without manual aliases.
 

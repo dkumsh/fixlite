@@ -11,7 +11,7 @@ description = "fixlite FIX parser core library"
 
 [dependencies]
 chrono = { workspace = true }
-fixlite_derive = { version = "0.5.1", path = "../fixlite_derive", optional = true }
+fixlite_derive = { version = "0.5.2", path = "../fixlite_derive", optional = true }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = { workspace = true }
 
