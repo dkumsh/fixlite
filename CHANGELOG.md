@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+### Removed
+- Root-level `fixlite::TagCursor` re-export (internal type is now hidden under `fixlite::__private`).
+
 ## v0.5.2 - 2026-01-07
 ### Added
 - Derive macro now auto-detects the `fixlite` crate name, so renamed dependencies work without manual aliases.

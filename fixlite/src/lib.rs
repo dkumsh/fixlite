@@ -1,6 +1,9 @@
 pub mod fix;
 mod scanner;
-pub use scanner::TagCursor;
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::scanner::TagCursor;
+}
 extern crate self as fixlite;
 #[cfg(feature = "derive")]
 pub use fixlite_derive::FixDeserialize;
@@ -79,7 +82,7 @@ impl FixError {
 }
 pub trait FixDeserialize<'fix>: Sized {
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
-        let mut cur = TagCursor::new(fix_message, b'\x01');
+        let mut cur = crate::__private::TagCursor::new(fix_message, b'\x01');
         let parsed = Self::deserialize_fields(&mut cur, |_| false)?;
         #[cfg(feature = "checksum")]
         cur.validate_checksum()?;
@@ -87,7 +90,7 @@ pub trait FixDeserialize<'fix>: Sized {
     }
 
     fn deserialize_fields<F>(
-        cur: &mut TagCursor<'fix>,
+        cur: &mut crate::__private::TagCursor<'fix>,
         is_a_parent_tag: F,
     ) -> Result<Self, FixError>
     where

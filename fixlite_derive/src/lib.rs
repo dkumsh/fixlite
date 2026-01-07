@@ -211,7 +211,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                 impl #impl_generics_new #fix_module_path::FixDeserialize<#fix_lifetime> for #struct_name #ty_generics #where_clause_new {
 
                     fn deserialize_fields<F>(
-                        tags: &mut #fix_module_path::TagCursor<#fix_lifetime>,
+                        tags: &mut #fix_module_path::__private::TagCursor<#fix_lifetime>,
                         is_a_top_level_tag: F,
                     ) -> Result<Self, #fix_module_path::FixError>
                     where
