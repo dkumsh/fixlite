@@ -1,7 +1,7 @@
 use crate::fix;
 use chrono::{DateTime, Utc};
 
-/// fix::tag::Registry is used to define mapping between FIX tags and their allowed Rust types
+/// tag::Registry is used to define mapping between FIX tags and their allowed Rust types.
 /// DefaultRegistry is provided and users can also override it with their own definitions.
 pub trait Registry {
     fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String>;
@@ -16,7 +16,7 @@ macro_rules! fix_tag_registry {
     ($registry_name:ident { $( $tag:literal => [$($type:ty),+ $(,)?] ),* $(,)? } ) => {
         pub struct $registry_name;
 
-        impl $crate::fix::tag::Registry for $registry_name {
+        impl $crate::tag::Registry for $registry_name {
             fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String> {
                 let parsed = tag.parse::<u32>();
                 match parsed.unwrap_or(0) {
@@ -37,21 +37,23 @@ macro_rules! fix_tag_registry {
 
         // Explicit AllowedType impls
         $( $(
-            impl $crate::fix::tag::AllowedType<$tag, $type> for $registry_name {}
-            impl $crate::fix::tag::AllowedType<$tag, Option<$type>> for $registry_name {}
+            impl $crate::tag::AllowedType<$tag, $type> for $registry_name {}
+            impl $crate::tag::AllowedType<$tag, Option<$type>> for $registry_name {}
         )+ )*
 
         // Blanket impls (only for undeclared tags)
-        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, String> for $registry_name {}
-        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, &str> for $registry_name {}
-        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<String>> for $registry_name {}
-        impl<const TAG: u32> $crate::fix::tag::AllowedType<TAG, Option<&str>> for $registry_name {}
+        impl<const TAG: u32> $crate::tag::AllowedType<TAG, String> for $registry_name {}
+        impl<const TAG: u32> $crate::tag::AllowedType<TAG, &str> for $registry_name {}
+        impl<const TAG: u32> $crate::tag::AllowedType<TAG, Option<String>> for $registry_name {}
+        impl<const TAG: u32> $crate::tag::AllowedType<TAG, Option<&str>> for $registry_name {}
     };
     // Case 2: Registry without braces
     ($registry_name:ident) => {
         $crate::fix_tag_registry!($registry_name {});
     };
 }
+
+pub use crate::fix_tag_registry;
 
 // Default FIX tag registry defining mapping between fix tags and
 // corresponding allowed Rust types.

@@ -37,7 +37,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
             quote! {#ident}
         })
         .unwrap_or_else(|| {
-            quote! {#fixlite_path::fix::tag::DefaultRegistry}
+            quote! {#fixlite_path::tag::DefaultRegistry}
         });
     let mut assertions = Vec::new();
 
@@ -289,7 +289,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
         const #const_assert_fn_name: () = {
             const fn assert_allowed<T, const TAG: u32>()
             where
-                #registry_type: #fixlite_path::fix::tag::AllowedType<TAG,T>,
+                #registry_type: #fixlite_path::tag::AllowedType<TAG,T>,
             {}
             fn __assertions #user_lifetime_tokens () {
                 #(#assertions)*

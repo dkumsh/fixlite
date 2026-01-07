@@ -2,8 +2,15 @@
 All notable changes to this project will be documented in this file.
 
 ## Unreleased
+### Added
+- `fixlite::tag::fix_tag_registry` re-export for registry macro access under the new module.
+
+### Changed
+- Tag/registry API moved to `fixlite::tag` (including `Registry`, `AllowedType`, `DefaultRegistry`).
+
 ### Removed
 - Root-level `fixlite::TagCursor` re-export (internal type is now hidden under `fixlite::__private`).
+- `fixlite::fix::tag` module path (use `fixlite::tag` instead).
 
 ## v0.5.2 - 2026-01-07
 ### Added

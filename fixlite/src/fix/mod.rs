@@ -1,6 +1,5 @@
 pub mod builder;
 mod price;
-pub mod tag;
 
 pub use crate::FixError;
 use crate::MalformedFix;

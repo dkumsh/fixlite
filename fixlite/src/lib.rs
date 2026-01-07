@@ -1,5 +1,6 @@
 pub mod fix;
 mod scanner;
+pub mod tag;
 #[doc(hidden)]
 pub mod __private {
     pub use crate::scanner::TagCursor;
