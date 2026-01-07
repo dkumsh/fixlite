@@ -2,7 +2,6 @@
 
 use fixlite::FixDeserialize;
 use fixlite::fix_tag_registry;
-use fixlite_derive::FixDeserialize;
 
 fix_tag_registry! {
     MyRegistry {

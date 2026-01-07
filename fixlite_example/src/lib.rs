@@ -7,7 +7,6 @@ mod tests {
     use fixlite::fix::DayOfMonth;
     use fixlite::fix::MsgType;
     use fixlite::{FixDeserialize, fix_tag_registry};
-    use fixlite_derive::FixDeserialize;
 
     #[allow(dead_code)]
     #[derive(FixDeserialize, Debug)]

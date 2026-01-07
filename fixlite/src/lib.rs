@@ -1,8 +1,9 @@
 pub mod fix;
 mod scanner;
-pub mod type_check;
 pub use scanner::TagCursor;
 extern crate self as fixlite;
+#[cfg(feature = "derive")]
+pub use fixlite_derive::FixDeserialize;
 
 use thiserror::Error;
 

@@ -1,6 +1,8 @@
 extern crate proc_macro;
 
-use fixlite::type_check::{IsTypeCompatible, is_str_ref};
+mod type_check;
+
+use crate::type_check::{IsTypeCompatible, is_str_ref};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{

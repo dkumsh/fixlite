@@ -22,7 +22,7 @@ fn is_type_compatible<T>(type_str: &str) -> bool {
     is_type_compatible_ty::<T>(&ty)
 }
 
-pub trait IsTypeCompatible {
+pub(crate) trait IsTypeCompatible {
     fn is_type_compatible(&self, syn_type: &Type) -> bool;
 }
 impl IsTypeCompatible for str {
@@ -90,7 +90,7 @@ fn compare_generic_arguments(
     true
 }
 
-pub fn is_str_ref(ty: &Type) -> bool {
+pub(crate) fn is_str_ref(ty: &Type) -> bool {
     if let Type::Reference(type_ref) = ty
         && let Type::Path(type_path) = &*type_ref.elem
         && let Some(segment) = type_path.path.segments.first()
@@ -102,7 +102,7 @@ pub fn is_str_ref(ty: &Type) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::type_check::{is_str_ref, is_type_compatible};
+    use super::{is_str_ref, is_type_compatible};
     use chrono::{DateTime, Utc};
     use syn::Type;
 

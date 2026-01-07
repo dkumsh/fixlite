@@ -3,7 +3,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use fixlite::FixDeserialize;
 use fixlite::fix_tag_registry;
-use fixlite_derive::FixDeserialize;
 
 // Re‑declare the registry and message type for the benchmark
 fix_tag_registry! {

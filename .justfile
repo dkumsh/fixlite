@@ -69,20 +69,36 @@ release ARG="patch":
     new_version="${major}.${minor}.${patch}"
     echo "🔖 Bumping $kind to: $new_version"
 
-    # 5. Update both Cargo.toml files
+    # 5. Ensure changelog has Unreleased before modifying files
+    if command -v rg >/dev/null 2>&1; then
+        if ! rg -q "^## Unreleased$" CHANGELOG.md; then
+            echo "🚫 CHANGELOG.md missing '## Unreleased' heading." >&2
+            exit 1
+        fi
+    else
+        if ! grep -qE "^## Unreleased$" CHANGELOG.md; then
+            echo "🚫 CHANGELOG.md missing '## Unreleased' heading." >&2
+            exit 1
+        fi
+    fi
+
+    # 6. Update workspace version, fixlite_derive dependency version, and changelog
     sed -i.bak -E \
         "s/^version[[:space:]]*=[[:space:]]*\"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$new_version\"/" \
-        Cargo.toml \
-        fixlite_derive/Cargo.toml
+        Cargo.toml
 
-    # Update the `fixlite` dependency inside fixlite_derive
+    # Update the `fixlite_derive` dependency inside fixlite
     sed -i.bak -E \
-        "s/(fixlite[[:space:]]*=[[:space:]]*\{[^}]*version[[:space:]]*=[[:space:]]*\")([0-9]+\.[0-9]+\.[0-9]+)(\"[^}]*\})/\1$new_version\3/" \
-        fixlite_derive/Cargo.toml
+        "s/(fixlite_derive[[:space:]]*=[[:space:]]*\{[^}]*version[[:space:]]*=[[:space:]]*\")([0-9]+\.[0-9]+\.[0-9]+)(\"[^}]*\})/\1$new_version\3/" \
+        fixlite/Cargo.toml
+    today=$(date +%Y-%m-%d)
+    sed -i.bak -E \
+        "0,/^## Unreleased$/s//## v$new_version - $today/" \
+        CHANGELOG.md
     rm -f *.bak
 
-    # 6. Commit, tag, and push
-    git add Cargo.toml fixlite_derive/Cargo.toml
+    # 7. Commit, tag, and push
+    git add Cargo.toml fixlite/Cargo.toml CHANGELOG.md
     git commit -m "Release: v$new_version"
     git tag "v$new_version"
     git push origin --tags HEAD:main

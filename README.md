@@ -33,10 +33,16 @@ fix_tag_registry!(EmptyRegistry);
 ```
 ## Deserializing FIX Messages
 Annotate your struct with #[derive(FixDeserialize)] and use the provided attributes to specify how each field corresponds to FIX tags.
-To validate BodyLength and CheckSum during parsing, enable the `checksum` feature:
+Enable the derive macro:
 
 ```toml
-fixlite = { version = "...", features = ["checksum"] }
+fixlite = { version = "...", features = ["derive"] }
+```
+
+To validate BodyLength and CheckSum during parsing, enable the `checksum` feature (optionally alongside `derive`):
+
+```toml
+fixlite = { version = "...", features = ["derive", "checksum"] }
 ```
 
 With checksum enabled, malformed frames return `FixError::Malformed(MalformedFix::...)` while semantic parse errors return `FixError::InvalidValue`.

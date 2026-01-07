@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+### Added
+- `derive` feature to re-export `FixDeserialize` from `fixlite`, so users can depend on a single crate.
+
+### Changed
+- Internalized derive type-check helpers in `fixlite_derive` to avoid a crate cycle.
+
+### Removed
+- Public `fixlite::type_check` module (internal helper; no longer part of the API).
+
+### Documentation
+- Updated README usage to show the `derive` feature and single-dependency setup.
+
 ## v0.4.1 - 2025-12-26
 ### Changed
 - FixBuilder `field`/`try_field` now take owned values; use `field_ref`/`try_field_ref` for borrowed values.
