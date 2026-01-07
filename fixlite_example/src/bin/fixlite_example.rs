@@ -62,7 +62,7 @@ fn main() {
         let mut start = 0;
         let mut end = len;
         for _ in 0..N {
-            let m = MarketDataMessage::from_fix(&buf[start..end]).unwrap();
+            let m: MarketDataMessage = fixlite::decode(&buf[start..end]).unwrap();
             // let m = fixlite_example::fixparser::parse_fix(&buf[start..end]).expect("ok");
 
             if m.body_length != Some(112) {

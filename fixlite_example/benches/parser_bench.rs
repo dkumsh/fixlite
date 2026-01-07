@@ -66,7 +66,7 @@ fn bench_parse_fix(c: &mut Criterion) {
             let mut offset = 0;
             for _ in 0..N {
                 let slice = &buf[offset..offset + len];
-                let m = MarketDataMessage::from_fix(slice).unwrap();
+                let m: MarketDataMessage = fixlite::decode(slice).unwrap();
                 // Check one field to ensure the optimizer doesn’t eliminate parsing.
                 assert_eq!(m.body_length, Some(112));
                 offset += len;

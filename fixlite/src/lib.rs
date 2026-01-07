@@ -81,6 +81,13 @@ impl FixError {
         Self::InvalidEnumValue { tag, ty }
     }
 }
+
+/// Decode a FIX message into a type that implements `FixDeserialize`.
+#[inline]
+pub fn decode<'fix, T: FixDeserialize<'fix>>(fix_message: &'fix [u8]) -> Result<T, FixError> {
+    T::from_fix(fix_message)
+}
+
 pub trait FixDeserialize<'fix>: Sized {
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let mut cur = crate::__private::TagCursor::new(fix_message, b'\x01');
@@ -159,7 +166,7 @@ mod checksum_tests {
     #[test]
     fn checksum_valid_message_passes() {
         let msg = build_message();
-        let parsed = ChecksumMessage::from_fix(&msg).unwrap();
+        let parsed: ChecksumMessage = fixlite::decode(&msg).unwrap();
         assert_eq!(parsed.msg_type, MsgType::NewOrderSingle);
     }
 

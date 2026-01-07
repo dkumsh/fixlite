@@ -77,6 +77,18 @@ struct TestMessage<'a> {
     symbol: &'a str, // Zero-copy deserialization
 }
 ```
+
+Decode a FIX message without calling the trait method directly:
+
+```rust
+let msg: TestMessage = fixlite::decode(bytes)?;
+```
+
+For non-SOH separators, use the delimiter-aware helper:
+
+```rust
+let msg: TestMessage = fixlite::decode_with_delimiter(bytes, b'|')?;
+```
 ## Building FIX Messages
 Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr automatically. begin_with returns a chainable message builder: use `field` for owned values, `field_ref` for borrowed values, and the `str`/`bytes` helpers for string/byte fields. For fallible encoding (currently only `f64` rejects NaN/inf), use `try_field`/`try_field_ref` or `try_fields`, which return `Result`.
 
@@ -159,7 +171,7 @@ Given a FIX message:
 ``` 
 8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|
 ```
-You can deserialize using from_fix() for SOH delimiter. If your input uses another separator, replace it before parsing:
+You can deserialize using `fixlite::decode` for the SOH delimiter:
 
 ```rust
 let raw = b"8=FIX.4.2|9=176|35=D|49=BUYER|56=SELLER|34=2|52=20190605-19:45:32.123|11=123|21=1|55=IBM|54=1|38=100|40=2|44=150.25|59=0|10=128|";
@@ -167,7 +179,7 @@ let message = raw
     .iter()
     .map(|&b| if b == b'|' { b'\x01' } else { b })
     .collect::<Vec<u8>>();
-let parsed = TestMessage::from_fix(&message)?;
+let parsed: TestMessage = fixlite::decode(&message)?;
 ```
 ## License
 This project is dual-licensed under MIT OR LGPL-3.0-or-later. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-LGPL-3.0](LICENSE-LGPL-3.0) files for details.

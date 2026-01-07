@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 ### Added
 - `fixlite::tag::fix_tag_registry` re-export for registry macro access under the new module.
+- `fixlite::decode` helper for parsing without calling the trait method.
 
 ### Changed
 - Tag/registry API moved to `fixlite::tag` (including `Registry`, `AllowedType`, `DefaultRegistry`).

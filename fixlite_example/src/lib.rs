@@ -130,13 +130,13 @@ mod tests {
 231=10.0|100087=26105623|100090=59806.74|205=7|746=843249447.0|100092=0.0|100093=0.00066246|262=1|268=2|\
 269=0|270=59765.5|271=1.0|272=20240918-12:11:46.529|269=1|270=150000.0|271=1810000.0|272=20240918-12:11:46.529|10=163|");
 
-        let parsed: MarketDataMessage = MarketDataMessage::from_fix(&message).unwrap();
+        let parsed: MarketDataMessage = fixlite::decode(&message).unwrap();
         println!("{:#?}", parsed);
     }
     #[test]
     fn component_test() {
         let message = fix(b"8=FIX.4.4|9=31226|35=W|125=bar|123=a1|124=a2|10=100|");
-        let parsed: Container = Container::from_fix(&message).unwrap();
+        let parsed: Container = fixlite::decode(&message).unwrap();
         println!("{:#?}", parsed);
     }
     #[test]
@@ -163,7 +163,7 @@ mod tests {
         }
 
         let message = fix(b"8=FIX.4.2|9=31226|35=W|8001=62.20|10=100|");
-        let parsed: TestMessage = TestMessage::from_fix(&message).unwrap();
+        let parsed: TestMessage = fixlite::decode(&message).unwrap();
         assert_eq!(parsed.custom_price, 62.2); // 8001=62.20
         assert_eq!(parsed.begin, "FIX.4.2"); // 8=FIX.4.2
         assert_eq!(parsed.msg_type, MsgType::MarketDataSnapshotFullRefresh); // "35=W"
