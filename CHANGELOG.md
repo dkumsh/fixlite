@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.5.1 - 2026-01-07
 ### Fixed
 - Release workflow publishes `fixlite_derive` before `fixlite` and retries to allow crates.io index propagation.
 
