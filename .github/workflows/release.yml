@@ -32,24 +32,34 @@ jobs:
           cargo test
 
       # 4a. Real publish ─ only on tag pushes
-      - name: Publish fixlite
-        if: github.event_name == 'push'
-        run: cargo publish -p fixlite
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Publish fixlite_derive
         if: github.event_name == 'push'
         run: cargo publish -p fixlite_derive
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish fixlite (retry until index updates)
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          for attempt in {1..5}; do
+            if cargo publish -p fixlite; then
+              exit 0
+            fi
+            echo "Publish failed (attempt ${attempt}); waiting for crates.io index..."
+            sleep 30
+          done
+          echo "Publish fixlite failed after retries"
+          exit 1
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       # 4b. Dry-run publish ─ only on manual dispatch
-      - name: Dry-run publish fixlite
-        if: github.event_name == 'workflow_dispatch'
-        run: cargo publish --dry-run -p fixlite
       - name: Dry-run publish fixlite_derive
         if: github.event_name == 'workflow_dispatch'
         run: cargo publish --dry-run -p fixlite_derive
+      - name: Dry-run publish fixlite
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo publish --dry-run -p fixlite
 
   create-github-release:
     needs: build-and-publish

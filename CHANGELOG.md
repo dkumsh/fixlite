@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+### Fixed
+- Release workflow publishes `fixlite_derive` before `fixlite` and retries to allow crates.io index propagation.
+
 ## v0.5.0 - 2026-01-07
 ### Added
 - `derive` feature to re-export `FixDeserialize` from `fixlite`, so users can depend on a single crate.
