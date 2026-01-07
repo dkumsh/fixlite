@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Tag/registry API moved to `fixlite::tag` (including `Registry`, `AllowedType`, `DefaultRegistry`).
 - FIX enums moved to `fixlite::enums`.
 - FixBuilder and builder traits moved to `fixlite::builder` (re-exported at crate root).
+- Error types moved to `fixlite::error` (re-exported at crate root).
 
 ### Removed
 - Root-level `fixlite::TagCursor` re-export (internal type is now hidden under `fixlite::__private`).
