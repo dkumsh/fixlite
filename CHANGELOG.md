@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+### Added
+- `FixTaggedValue` trait for tag-bound values, implemented by FIX enums (including by-reference forms).
+- `field_tagged`/`field_tagged_ref` and `try_field_tagged`/`try_field_tagged_ref` builder methods.
+- `build_fix!` macro support for `tag => value` pairs and `@value` tagged fields (legacy `tag, value` remains supported).
+- `tags` module with common FIX tag constants (not exhaustive).
+
+### Documentation
+- Updated README with tagged-value and new macro syntax examples.
+
 ## v0.6.0 - 2026-01-07
 ### Added
 - `fixlite::tag::fix_tag_registry` re-export for registry macro access under the new module.

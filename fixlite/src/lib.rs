@@ -4,7 +4,10 @@ pub mod error;
 pub mod fix;
 mod scanner;
 pub mod tag;
-pub use crate::builder::{AsFixStr, FixBuilder, FixSendingTime, FixSeqNum, FixValue, SOH};
+pub mod tags;
+pub use crate::builder::{
+    AsFixStr, FixBuilder, FixSendingTime, FixSeqNum, FixTaggedValue, FixValue, SOH,
+};
 pub use crate::error::{FixError, MalformedFix};
 #[doc(hidden)]
 pub mod __private {

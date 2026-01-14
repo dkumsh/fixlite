@@ -3,6 +3,9 @@ use chrono::{DateTime, Utc};
 
 /// tag::Registry is used to define mapping between FIX tags and their allowed Rust types.
 /// DefaultRegistry is provided and users can also override it with their own definitions.
+/// Trait that describes which Rust types are allowed for a given FIX tag.
+///
+/// Most users should rely on `fix_tag_registry!` instead of implementing this manually.
 pub trait Registry {
     fn get_allowed_types_for_tag(&self, tag: &str) -> Vec<String>;
     fn contains(&self, tag: &str) -> bool;

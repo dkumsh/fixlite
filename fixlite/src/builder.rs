@@ -8,22 +8,50 @@ const HEADER_SPACE: usize = 32; // bytes reserved for 8 & 9
 /// Build a FIX message with a single macro invocation.
 ///
 /// This expands to `begin_with(...).field(...).finish()` using `FixBuilder`.
+/// Supports `tag => value` pairs, tagged values (`@value`), and legacy `tag, value` pairs.
 #[macro_export]
 macro_rules! build_fix {
-    ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(, $tag:expr, $val:expr )* $(,)?) => {{
+    ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(,)?) => {{
         $builder
             .begin_with(&$seq_out, &$dt, &$msg_type)
-        $(
-            .field_ref($tag as u32, &$val)
-        )*
             .finish()
     }};
+    ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(, $($rest:tt)+)?) => {{
+        let msg = $builder.begin_with(&$seq_out, &$dt, &$msg_type);
+        $crate::build_fix!(@fields msg $(, $($rest)+)?).finish()
+    }};
+    (@fields $msg:expr) => { $msg };
+    (@fields $msg:expr, ) => { $msg };
+    (@fields $msg:expr, $tag:expr => $val:expr ,) => {
+        $msg.field_ref($tag as u32, &$val)
+    };
+    (@fields $msg:expr, @$val:expr ,) => {
+        $msg.field_tagged_ref(&$val)
+    };
+    (@fields $msg:expr, $tag:expr, $val:expr ,) => {
+        $msg.field_ref($tag as u32, &$val)
+    };
+    (@fields $msg:expr, $tag:expr => $val:expr $(, $($rest:tt)+)?) => {
+        $crate::build_fix!(@fields $msg.field_ref($tag as u32, &$val) $(, $($rest)+)?)
+    };
+    (@fields $msg:expr, @$val:expr $(, $($rest:tt)+)?) => {
+        $crate::build_fix!(@fields $msg.field_tagged_ref(&$val) $(, $($rest)+)?)
+    };
+    (@fields $msg:expr, $tag:expr, $val:expr $(, $($rest:tt)+)?) => {
+        $crate::build_fix!(@fields $msg.field_ref($tag as u32, &$val) $(, $($rest)+)?)
+    };
 }
 
 /// Values that can be encoded as a FIX field value (no heap allocation required).
 pub trait FixValue {
     /// Encode the value into `out` without allocating.
     fn encode(&self, out: &mut Vec<u8>);
+}
+
+/// Values that map to a single, fixed FIX tag.
+pub trait FixTaggedValue: FixValue {
+    /// The FIX tag associated with this type.
+    const TAG: u32;
 }
 
 /// Fallible FIX value encoding for builders that need validation.
@@ -455,6 +483,20 @@ impl<'a> FixMsg<'a> {
         self
     }
 
+    /// Append a field using a value with a compile-time tag.
+    #[inline]
+    pub fn field_tagged<V: FixTaggedValue>(self, value: V) -> Self {
+        kv(&mut self.b.buf, V::TAG, &value);
+        self
+    }
+
+    /// Append a field using a borrowed value with a compile-time tag.
+    #[inline]
+    pub fn field_tagged_ref<V: FixTaggedValue + ?Sized>(self, value: &V) -> Self {
+        kv(&mut self.b.buf, V::TAG, value);
+        self
+    }
+
     /// Append a string field.
     #[inline]
     pub fn str(self, tag: u32, s: &str) -> Self {
@@ -486,6 +528,26 @@ impl<'a> FixMsg<'a> {
         V: TryFixValue<Error = FixError> + ?Sized,
     {
         try_kv(&mut self.b.buf, tag, value)?;
+        Ok(self)
+    }
+
+    /// Append a field using fallible encoding and a compile-time tag.
+    #[inline]
+    pub fn try_field_tagged<V>(self, value: V) -> Result<Self, FixError>
+    where
+        V: FixTaggedValue + TryFixValue<Error = FixError>,
+    {
+        try_kv(&mut self.b.buf, V::TAG, &value)?;
+        Ok(self)
+    }
+
+    /// Append a field using fallible encoding and a borrowed value with a compile-time tag.
+    #[inline]
+    pub fn try_field_tagged_ref<V>(self, value: &V) -> Result<Self, FixError>
+    where
+        V: FixTaggedValue + TryFixValue<Error = FixError> + ?Sized,
+    {
+        try_kv(&mut self.b.buf, V::TAG, value)?;
         Ok(self)
     }
 
@@ -537,6 +599,18 @@ impl<'a> FixMsgWriter<'a> {
         kv(self.buf, tag, v);
     }
 
+    /// Append a field using a value with a compile-time tag.
+    #[inline]
+    pub fn field_tagged<V: FixTaggedValue>(&mut self, value: V) {
+        kv(self.buf, V::TAG, &value);
+    }
+
+    /// Append a field using a borrowed value with a compile-time tag.
+    #[inline]
+    pub fn field_tagged_ref<V: FixTaggedValue + ?Sized>(&mut self, value: &V) {
+        kv(self.buf, V::TAG, value);
+    }
+
     /// Append a field by value using fallible encoding (currently only `f64` can fail).
     #[inline]
     pub fn try_field<V>(&mut self, tag: u32, v: V) -> Result<(), FixError>
@@ -553,6 +627,24 @@ impl<'a> FixMsgWriter<'a> {
         V: TryFixValue<Error = FixError> + ?Sized,
     {
         try_kv(self.buf, tag, v)
+    }
+
+    /// Append a field using fallible encoding and a compile-time tag.
+    #[inline]
+    pub fn try_field_tagged<V>(&mut self, value: V) -> Result<(), FixError>
+    where
+        V: FixTaggedValue + TryFixValue<Error = FixError>,
+    {
+        try_kv(self.buf, V::TAG, &value)
+    }
+
+    /// Append a field using fallible encoding and a borrowed value with a compile-time tag.
+    #[inline]
+    pub fn try_field_tagged_ref<V>(&mut self, value: &V) -> Result<(), FixError>
+    where
+        V: FixTaggedValue + TryFixValue<Error = FixError> + ?Sized,
+    {
+        try_kv(self.buf, V::TAG, value)
     }
 
     /// Append a string field.
@@ -775,6 +867,7 @@ mod tests {
         HandlInst as FixHandlInst, MsgType as FixMsgType, OrdType as FixOrdType, Side as FixSide,
     };
     use crate::fix::{DayOfMonth as FixDayOfMonth, Price as FixPrice};
+    use crate::tags;
     use chrono::{TimeZone, Timelike};
 
     // ---- Test-only FIX types ----
@@ -808,6 +901,9 @@ mod tests {
             }
         }
     }
+    impl FixTaggedValue for HandlInst {
+        const TAG: u32 = tags::HANDL_INST;
+    }
 
     #[derive(Copy, Clone, Debug)]
     enum OrdType {
@@ -819,6 +915,9 @@ mod tests {
                 OrdType::Limit => "2",
             }
         }
+    }
+    impl FixTaggedValue for OrdType {
+        const TAG: u32 = tags::ORD_TYPE;
     }
 
     #[derive(Copy, Clone, Debug)]
@@ -1080,9 +1179,9 @@ mod tests {
 
         let msg = b
             .begin_with(&seq, &dt, &mt)
-            .field(11, cl)
-            .field(21, HandlInst::Automated)
-            .field(40, OrdType::Limit)
+            .field(tags::CL_ORD_ID, cl)
+            .field_tagged(HandlInst::Automated)
+            .field_tagged(OrdType::Limit)
             .field(44, px)
             .finish();
 
@@ -1134,12 +1233,9 @@ mod tests {
             42u32,
             dt,
             TestMsgType::NewOrderSingle,
-            11,
-            cl,
-            21,
-            HandlInst::Automated,
-            40,
-            OrdType::Limit,
+            tags::CL_ORD_ID => cl,
+            @HandlInst::Automated,
+            @OrdType::Limit,
         );
 
         assert!(fix_message.starts_with(b"8=FIX.4.2\x01"));
@@ -1162,10 +1258,8 @@ mod tests {
             seq,
             dt,
             FixMsgType::NewOrderSingle,
-            54,
-            FixSide::Buy,
-            40,
-            FixOrdType::Limit,
+            @FixSide::Buy,
+            @FixOrdType::Limit,
         );
 
         assert_eq!(find_field(fix_message, 35).unwrap(), b"D");
@@ -1175,6 +1269,54 @@ mod tests {
 
         verify_body_length(fix_message);
         verify_checksum(fix_message);
+    }
+
+    #[test]
+    fn macro_build_fix_supports_arrow_and_tagged_values() {
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+
+        let dt = fixed_dt();
+        let fix_message = build_fix!(
+            builder,
+            3u32,
+            dt,
+            FixMsgType::NewOrderSingle,
+            tags::SIDE => FixSide::Buy,
+            tags::ORD_TYPE => FixOrdType::Limit,
+            @FixHandlInst::Automated,
+        );
+
+        assert_eq!(find_field(fix_message, 35).unwrap(), b"D");
+        assert_eq!(find_field(fix_message, 34).unwrap(), b"3");
+        assert_eq!(find_field(fix_message, tags::SIDE).unwrap(), b"1");
+        assert_eq!(find_field(fix_message, tags::ORD_TYPE).unwrap(), b"2");
+        assert_eq!(find_field(fix_message, tags::HANDL_INST).unwrap(), b"1");
+
+        verify_body_length(fix_message);
+        verify_checksum(fix_message);
+    }
+
+    #[test]
+    fn field_tagged_uses_enum_tag_constants() {
+        let mut b = FixBuilder::new("FIX.4.2", "S", "T");
+
+        let dt = fixed_dt();
+        let seq = 9u32;
+        let mt = FixMsgType::NewOrderSingle;
+        let side = FixSide::Buy;
+        let ord_type = FixOrdType::Limit;
+
+        let msg = b
+            .begin_with(&seq, &dt, &mt)
+            .field_tagged_ref(&side)
+            .field_tagged(ord_type)
+            .finish();
+
+        assert_eq!(find_field(msg, tags::SIDE).unwrap(), b"1");
+        assert_eq!(find_field(msg, tags::ORD_TYPE).unwrap(), b"2");
+
+        verify_body_length(msg);
+        verify_checksum(msg);
     }
 
     #[test]

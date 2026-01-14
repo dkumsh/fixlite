@@ -46,6 +46,18 @@ macro_rules! fix_enum {
             }
         }
 
+        impl $crate::FixTaggedValue for $enum_name {
+            const TAG: u32 = $tag_num;
+        }
+
+        impl $crate::FixTaggedValue for &$enum_name {
+            const TAG: u32 = $tag_num;
+        }
+
+        impl $crate::FixTaggedValue for &mut $enum_name {
+            const TAG: u32 = $tag_num;
+        }
+
         impl $crate::FixValue for &$enum_name {
             #[inline]
             fn encode(&self, out: &mut Vec<u8>) {
