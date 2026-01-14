@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.6.1 - 2026-01-14
 ### Added
 - `FixTaggedValue` trait for tag-bound values, implemented by FIX enums (including by-reference forms).
 - `field_tagged`/`field_tagged_ref` and `try_field_tagged`/`try_field_tagged_ref` builder methods.
