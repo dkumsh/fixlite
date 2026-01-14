@@ -46,6 +46,20 @@ macro_rules! fix_enum {
             }
         }
 
+        impl $crate::FixValue for &$enum_name {
+            #[inline]
+            fn encode(&self, out: &mut Vec<u8>) {
+                out.extend_from_slice((*self).as_str().as_bytes());
+            }
+        }
+
+        impl $crate::FixValue for &mut $enum_name {
+            #[inline]
+            fn encode(&self, out: &mut Vec<u8>) {
+                out.extend_from_slice((*self).as_str().as_bytes());
+            }
+        }
+
         impl From<$enum_name> for String {
             fn from(e: $enum_name) -> String {
                 e.as_str().to_string()

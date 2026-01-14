@@ -20,7 +20,11 @@ pub fn decode<'fix, T: FixDeserialize<'fix>>(fix_message: &'fix [u8]) -> Result<
     T::from_fix(fix_message)
 }
 
+/// Trait for types that can be deserialized from FIX messages.
+///
+/// Prefer using `#[derive(FixDeserialize)]` (feature `derive`) to implement this.
 pub trait FixDeserialize<'fix>: Sized {
+    /// Decode a FIX message using the default SOH delimiter, with optional checksum validation.
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let mut cur = crate::__private::TagCursor::new(fix_message, b'\x01');
         let parsed = Self::deserialize_fields(&mut cur, |_| false)?;
@@ -29,6 +33,7 @@ pub trait FixDeserialize<'fix>: Sized {
         Ok(parsed)
     }
 
+    /// Parse fields from the tag cursor, deciding which tags belong to this type.
     fn deserialize_fields<F>(
         cur: &mut crate::__private::TagCursor<'fix>,
         is_a_parent_tag: F,
@@ -36,6 +41,7 @@ pub trait FixDeserialize<'fix>: Sized {
     where
         F: Fn(u32) -> bool;
 
+    /// Return whether a tag is known to this type.
     fn is_known_tag(tag: u32) -> bool;
 }
 

@@ -771,7 +771,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::enums::{HandlInst as FixHandlInst, MsgType as FixMsgType, OrdType as FixOrdType};
+    use crate::enums::{
+        HandlInst as FixHandlInst, MsgType as FixMsgType, OrdType as FixOrdType, Side as FixSide,
+    };
     use crate::fix::{DayOfMonth as FixDayOfMonth, Price as FixPrice};
     use chrono::{TimeZone, Timelike};
 
@@ -1150,17 +1152,42 @@ mod tests {
     }
 
     #[test]
+    fn macro_build_fix_accepts_enum_references() {
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+
+        let dt = fixed_dt();
+        let seq = 7u32;
+        let fix_message = build_fix!(
+            builder,
+            seq,
+            dt,
+            FixMsgType::NewOrderSingle,
+            54,
+            FixSide::Buy,
+            40,
+            FixOrdType::Limit,
+        );
+
+        assert_eq!(find_field(fix_message, 35).unwrap(), b"D");
+        assert_eq!(find_field(fix_message, 34).unwrap(), b"7");
+        assert_eq!(find_field(fix_message, 54).unwrap(), b"1");
+        assert_eq!(find_field(fix_message, 40).unwrap(), b"2");
+
+        verify_body_length(fix_message);
+        verify_checksum(fix_message);
+    }
+
+    #[test]
     fn builder_round_trip_with_fix_types() {
         let mut b = FixBuilder::new("FIX.4.2", "SENDER", "TARGET");
 
         let dt = fixed_dt();
-        let seq = 42u64;
-        let mt = FixMsgType::NewOrderSingle;
+        let seq = 42;
         let price: FixPrice = "123.4500".parse().unwrap();
         let day = FixDayOfMonth(7);
 
         let msg = b
-            .begin_with(&seq, &dt, &mt)
+            .begin_with(&seq, &dt, &FixMsgType::NewOrderSingle)
             .field(21, FixHandlInst::Automated)
             .field(40, FixOrdType::Limit)
             .field(44, price)

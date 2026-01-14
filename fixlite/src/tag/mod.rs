@@ -8,6 +8,9 @@ pub trait Registry {
     fn contains(&self, tag: &str) -> bool;
 }
 
+/// Marker trait implemented by registries to allow specific tag/type pairs.
+///
+/// This is used for compile-time validation; users generally rely on `fix_tag_registry!`.
 pub trait AllowedType<const TAG: u32, T> {}
 
 #[macro_export]
