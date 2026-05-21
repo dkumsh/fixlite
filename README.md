@@ -85,6 +85,17 @@ Decode a FIX message without calling the trait method directly:
 let msg: TestMessage = fixlite::decode(bytes)?;
 ```
 
+`fixlite::decode` (and `FixDeserialize::from_fix`) validate that the input is ASCII before parsing — FIX 4.x is by spec an ASCII protocol, and the check guarantees the parser can safely treat field values as `&str` internally. Non-ASCII input returns `FixError::Malformed(MalformedFix::NonAsciiByte)`.
+
+If you have already verified your input (for example, because it comes from a trusted upstream that ASCII-validates), use the `unsafe` variants to skip the check:
+
+```rust
+// SAFETY: caller guarantees `bytes` contains only valid UTF-8 (ASCII is sufficient).
+let msg: TestMessage = unsafe { fixlite::decode_unchecked(bytes) }?;
+```
+
+Violating the safety contract is undefined behavior because the parser uses unchecked UTF-8 conversion internally.
+
 ## Building FIX Messages
 Use FixBuilder directly or via the build_fix! macro. Types that implement FixValue can be encoded, and FIX enums implement AsFixStr and FixTaggedValue automatically. begin_with returns a chainable message builder: use `field` for owned values, `field_ref` for borrowed values, `field_tagged`/`field_tagged_ref` for tag-bound types, and the `str`/`bytes` helpers for string/byte fields. For fallible encoding (currently only `f64` rejects NaN/inf), use `try_field`/`try_field_ref`/`try_field_tagged`/`try_field_tagged_ref` or `try_fields`, which return `Result`.
 

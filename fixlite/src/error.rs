@@ -13,6 +13,8 @@ pub enum MalformedFix {
     BodyLengthMismatch,
     #[error("Checksum mismatch")]
     ChecksumMismatch,
+    #[error("Non-ASCII byte in FIX message")]
+    NonAsciiByte,
 }
 
 #[derive(Error, Debug)]

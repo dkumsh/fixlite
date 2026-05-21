@@ -18,17 +18,57 @@ extern crate self as fixlite;
 pub use fixlite_derive::FixDeserialize;
 
 /// Decode a FIX message into a type that implements `FixDeserialize`.
+///
+/// Validates that all bytes are ASCII before parsing. FIX 4.x is by spec an
+/// ASCII protocol; non-ASCII input returns `MalformedFix::NonAsciiByte`. The
+/// validation guarantees the parser can safely treat field values as `&str`
+/// throughout. Use [`decode_unchecked`] to skip the check when the caller has
+/// already verified the input.
 #[inline]
 pub fn decode<'fix, T: FixDeserialize<'fix>>(fix_message: &'fix [u8]) -> Result<T, FixError> {
     T::from_fix(fix_message)
+}
+
+/// Decode a FIX message without validating that bytes are ASCII.
+///
+/// # Safety
+/// The caller must guarantee that `fix_message` contains only valid UTF-8
+/// bytes (ASCII is sufficient and is the FIX 4.x spec). Passing bytes that
+/// violate this contract is undefined behavior because the parser uses
+/// unchecked UTF-8 conversion internally.
+#[inline]
+pub unsafe fn decode_unchecked<'fix, T: FixDeserialize<'fix>>(
+    fix_message: &'fix [u8],
+) -> Result<T, FixError> {
+    // SAFETY: forwarded to the caller.
+    unsafe { T::from_fix_unchecked(fix_message) }
 }
 
 /// Trait for types that can be deserialized from FIX messages.
 ///
 /// Prefer using `#[derive(FixDeserialize)]` (feature `derive`) to implement this.
 pub trait FixDeserialize<'fix>: Sized {
-    /// Decode a FIX message using the default SOH delimiter, with optional checksum validation.
+    /// Decode a FIX message after validating that all bytes are ASCII.
+    ///
+    /// Returns `MalformedFix::NonAsciiByte` if any byte is `>= 128`. Use
+    /// [`Self::from_fix_unchecked`] to skip this validation.
     fn from_fix(fix_message: &'fix [u8]) -> Result<Self, FixError> {
+        if !fix_message.is_ascii() {
+            return Err(crate::MalformedFix::NonAsciiByte.into());
+        }
+        // SAFETY: just validated that every byte is ASCII (< 128), which is a
+        // subset of valid UTF-8, so the unchecked UTF-8 conversions performed
+        // by the parser are sound.
+        unsafe { Self::from_fix_unchecked(fix_message) }
+    }
+
+    /// Decode a FIX message without validating UTF-8.
+    ///
+    /// # Safety
+    /// The caller must guarantee that `fix_message` contains only valid UTF-8
+    /// bytes (ASCII is sufficient). Violating this contract is undefined
+    /// behavior because field values are converted to `&str` without checks.
+    unsafe fn from_fix_unchecked(fix_message: &'fix [u8]) -> Result<Self, FixError> {
         let mut cur = crate::__private::TagCursor::new(fix_message, b'\x01');
         let parsed = Self::deserialize_fields(&mut cur, |_| false)?;
         #[cfg(feature = "checksum")]
@@ -46,6 +86,61 @@ pub trait FixDeserialize<'fix>: Sized {
 
     /// Return whether a tag is known to this type.
     fn is_known_tag(tag: u32) -> bool;
+}
+
+#[cfg(test)]
+mod ascii_validation_tests {
+    use super::FixError;
+    use crate::FixBuilder;
+    use crate::MalformedFix;
+    use crate::enums::MsgType;
+    use chrono::{TimeZone, Utc};
+
+    #[derive(Debug, fixlite_derive::FixDeserialize)]
+    struct SimpleMessage {
+        #[fix(tag = 35)]
+        msg_type: MsgType,
+    }
+
+    fn build_valid_message() -> Vec<u8> {
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+        let dt = Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap();
+        let seq = 1u32;
+        builder
+            .begin_with(&seq, &dt, &MsgType::NewOrderSingle)
+            .finish()
+            .to_vec()
+    }
+
+    #[test]
+    fn decode_rejects_non_ascii_bytes() {
+        // Take a valid FIX message and corrupt one byte to non-ASCII.
+        let mut msg = build_valid_message();
+        // Replace a known-ASCII byte mid-message (the 'T' in SenderCompID "T").
+        let pos = msg.iter().position(|&b| b == b'T').unwrap();
+        msg[pos] = 0xFF;
+
+        let err = crate::decode::<SimpleMessage>(&msg).unwrap_err();
+        assert!(
+            matches!(err, FixError::Malformed(MalformedFix::NonAsciiByte)),
+            "expected NonAsciiByte, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn decode_accepts_pure_ascii() {
+        let msg = build_valid_message();
+        let parsed: SimpleMessage = crate::decode(&msg).unwrap();
+        assert_eq!(parsed.msg_type, MsgType::NewOrderSingle);
+    }
+
+    #[test]
+    fn decode_unchecked_skips_validation() {
+        let msg = build_valid_message();
+        // SAFETY: FixBuilder output is pure ASCII.
+        let parsed: SimpleMessage = unsafe { crate::decode_unchecked(&msg) }.unwrap();
+        assert_eq!(parsed.msg_type, MsgType::NewOrderSingle);
+    }
 }
 
 #[cfg(all(test, feature = "checksum"))]

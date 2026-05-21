@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+### Added
+- `decode_unchecked` / `FixDeserialize::from_fix_unchecked` (`unsafe`) entry points for callers that have already verified their input.
+- `MalformedFix::NonAsciiByte` error variant.
+
+### Changed
+- **Soundness fix.** `decode` / `FixDeserialize::from_fix` now validate that the input is ASCII before parsing and return `MalformedFix::NonAsciiByte` otherwise. Previously, non-ASCII input would trigger undefined behavior inside the parser's unchecked UTF-8 conversion. FIX 4.x is by spec an ASCII protocol; the validation matches the protocol's actual contract.
+
+### Migration
+- If you were calling `decode` with input that may contain non-ASCII bytes, you now need to either pre-filter the bytes or call `decode_unchecked` (and uphold its safety contract). For all FIX-compliant traffic, no changes are required.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.
