@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
 ### Licensing
 - Changed dual license from `MIT OR LGPL-3.0-or-later` to `MIT OR Apache-2.0`, matching the Rust ecosystem standard. Apache-2.0 adds an explicit patent grant (relevant for users in regulated finance) and removes the corporate-legal friction caused by LGPL appearing in the license string. Adopters retain the option to choose MIT as before; nothing about MIT changes.
 
+### Dependencies
+- `serde` is now an optional dependency gated behind the `serde` feature flag. Previously, `FixedPrice<W, F>`'s `Serialize` / `Deserialize` derives pulled `serde` + `serde_derive` unconditionally for every fixlite user. Users who need serde support now enable `fixlite = { ..., features = ["serde"] }`; everyone else pays nothing.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.

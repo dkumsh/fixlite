@@ -1,3 +1,4 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
@@ -8,7 +9,8 @@ use std::{
 
 /// Fixed-point number with generic digits: W digits for whole part, F digits for fraction.
 /// Total W + F must be ≤ 18 to fit into i64.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FixedPrice<const W: u32, const F: u32>(i64);
 
 /// Alias for the default Price (10 whole digits, 8 fractional digits)
