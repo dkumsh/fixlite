@@ -178,26 +178,74 @@ use fixlite::enums::{HandlInst, MsgType, OrdType, Side, TimeInForce};
 let mut builder = FixBuilder::new("FIX.4.2", "BUYER", "SELLER");
 let dt = Utc::now();
 
+let price: fixlite::fix::Price = "150.25".parse().unwrap();
+
 let msg = build_fix!(
     builder,
     2u64,
     dt,
     MsgType::NewOrderSingle,
-    tags::CL_ORD_ID => "123",
-    tags::SYMBOL => "IBM",
     tags::ORDER_QTY => 100u32,
-    tags::PRICE => "150.25",
+    tags::PRICE => price,
     @HandlInst::Automated,
     @Side::Buy,
     @OrdType::Limit,
     @TimeInForce::Day,
 );
 ```
+
+**Note on string fields in the macro.** The `tag => value` arm expands to `field_ref(tag, &value)`. The unsized `str` implements `FixValue`, and so does `String`, but `&str` (a reference) does *not*. Two patterns work:
+
+```rust
+// (a) Owned String works directly.
+let cl_ord_id = String::from("123");
+let msg = build_fix!(
+    builder, 2u64, dt, MsgType::NewOrderSingle,
+    tags::CL_ORD_ID => cl_ord_id,
+    @Side::Buy,
+);
+
+// (b) For &str, deref so the value position is `str` (unsized) rather than `&str`.
+let symbol: &str = "IBM";
+let msg = build_fix!(
+    builder, 2u64, dt, MsgType::NewOrderSingle,
+    tags::SYMBOL => *symbol,
+    @Side::Buy,
+);
+```
+
+For mixed string handling, the chained `FixBuilder` syntax with `.str(tag, "literal")` is often clearer than the macro.
 ### Attributes
  * `#[fix(tag = N)]`: Maps the field to FIX tag N.
  * `#[fix(component)]`: Indicates that the field is a nested component.
  * `#[fix_group(tag = N)]`: Indicates that the field is a repeating group starting with tag N.
  * `#[fix_registry(RegistryName)]`: Specifies the registry to use for tag-type validation. Defaults to DefaultRegistry if not specified.
+
+### Repeating Groups
+
+`#[fix_group(tag = N)]` declares a repeating-group field of type `Vec<T>`, where `N` is the FIX "NoXxx" counter tag (for example, `453` for `NoPartyIDs`). Element boundaries within the group are detected heuristically rather than from a schema. Two assumptions apply:
+
+1. **All elements start with the same first tag.** When the parser sees the same first tag a second time, it treats that as the start of a new element. If your dialect allows an element's leading tag to be omitted, the parser will not detect element boundaries correctly.
+2. **A top-level (outer-struct) tag terminates the group.** If a tag known to the outer struct appears while parsing group elements, the group is considered finished. If an element's tag overlaps with an outer-struct tag, the group will be truncated at that element.
+
+**Nested groups are not supported.** Groups whose elements themselves contain `#[fix_group]` fields will not parse correctly; the inner group's boundaries collide with the outer group's heuristic. For nested-group support you currently need a hand-written `FixDeserialize` impl.
+
+### Components
+
+`#[fix(component)]` declares that a field is a nested component — a sub-struct whose tags are inlined into the message body. The derive routes incoming tags to the component using its `FixDeserialize::is_known_tag` set:
+
+```rust
+if component_field.is_none() && Inner::is_known_tag(tag) {
+    component_field = Some(Inner::deserialize_fields(...)?);
+}
+```
+
+This implies two constraints:
+
+1. **Component and outer-struct tag sets must be disjoint.** A tag known to both the outer struct and the component is consumed by the outer struct first; the component never sees it.
+2. **First match wins.** If two components share an overlapping tag set, the *field declaration order* determines which component captures the tag.
+
+Optional components (`Option<Component<'a>>`) are allowed and reported missing-via-`None` rather than as `MissingComponent`.
 
 ## Zero-Copy Deserialization
 For string fields defined as &str, fixlite supports zero-copy deserialization. This means that during deserialization, the string slices in the FIX message are borrowed directly, avoiding unnecessary allocations and enhancing performance.

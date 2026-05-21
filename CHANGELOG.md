@@ -31,6 +31,11 @@ All notable changes to this project will be documented in this file.
 ### Changed (breaking)
 - `FixError::MissingField(&'static str)` is now `FixError::MissingField { name: &'static str, tag: u32 }`, carrying the FIX tag number alongside the Rust field name. The error message becomes `"Missing required field cl_ord_id (tag 11)"` — a counterparty operator can read it in FIX terms. A separate `FixError::MissingComponent(&'static str)` variant covers `#[fix(component)]` fields, which have no single tag. Code that pattern-matches `MissingField("...")` needs updating to `MissingField { name, .. }`.
 
+### Documentation
+- Fixed the `build_fix!` macro example, which previously showed string-literal values that do not compile (`tags::CL_ORD_ID => "123"`). The README now documents the two patterns that work: an owned `String` value, or explicit deref of a `&str` (`tags::CL_ORD_ID => *some_str_ref`).
+- Documented the heuristics and limits of the repeating-group parser (same-first-tag boundary detection, no nested-group support, behavior when outer-struct tags overlap with element tags).
+- Documented the component-routing rules in the derive (tag sets must be disjoint from the outer struct; first-match-wins on overlap; optional components allowed).
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.

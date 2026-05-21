@@ -1508,6 +1508,36 @@ mod tests {
     }
 
     #[test]
+    fn macro_build_fix_accepts_string_via_owned_string() {
+        // `String` implements `FixValue`, so passing an owned `String` works.
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+        let dt = fixed_dt();
+        let cl_ord_id = String::from("ABC123");
+        let msg = build_fix!(
+            builder, 1u32, dt, FixMsgType::NewOrderSingle,
+            tags::CL_ORD_ID => cl_ord_id,
+            @FixSide::Buy,
+        );
+        assert_eq!(find_field(msg, tags::CL_ORD_ID).unwrap(), b"ABC123");
+    }
+
+    #[test]
+    fn macro_build_fix_accepts_string_via_explicit_deref() {
+        // `&str` does not implement FixValue, but the unsized `str` does.
+        // Dereffing produces `&str` as the value position, expanding to
+        // `field_ref(tag, &*str_ref)` = `field_ref::<str>(tag, &str)`.
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+        let dt = fixed_dt();
+        let cl_ord_id: &str = "ABC123";
+        let msg = build_fix!(
+            builder, 1u32, dt, FixMsgType::NewOrderSingle,
+            tags::CL_ORD_ID => *cl_ord_id,
+            @FixSide::Buy,
+        );
+        assert_eq!(find_field(msg, tags::CL_ORD_ID).unwrap(), b"ABC123");
+    }
+
+    #[test]
     fn try_field_f64_rejects_nan() {
         let mut b = FixBuilder::new("FIX.4.2", "S", "T");
         let dt = fixed_dt();
