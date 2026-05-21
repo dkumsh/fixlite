@@ -146,7 +146,9 @@ let msg = builder
 // The tags module is a convenience list of common tags; it is not exhaustive.
 ```
 
-Fallible field example (for `f64` validation, in a `Result`-returning context):
+### Encoding `f64`
+
+`f64` does not implement `FixValue` — encoding can fail for `NaN`/`inf`, and a silent infallible path would emit a malformed FIX field. Use the fallible builder methods (`try_field`, `try_field_ref`) or the `?tag => value` macro arm:
 
 ```rust
 let price = 150.25_f64;
@@ -157,7 +159,15 @@ let msg = builder
     .finish();
 ```
 
-You can also use the build_fix! macro (supports `tag => value` and tagged values via `@value`):
+When you know finiteness statically (typical for prices), prefer `FixedPrice<W, F>` (or its alias `Price`), which encodes without allocation and has no NaN concerns.
+
+### `build_fix!` macro
+
+You can also use the build_fix! macro. It supports four arms:
+- `tag => value` — infallible field
+- `?tag => value` — fallible field (currently `f64`); expands to `try_field_ref(...)?` and requires a `Result`-returning context
+- `@value` — tagged value (the type provides its FIX tag)
+- legacy `tag, value` — equivalent to `tag => value`
 
 ```rust
 use chrono::Utc;

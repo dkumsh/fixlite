@@ -10,7 +10,12 @@ const MAX_BODY_LEN_DIGITS: usize = 20;
 /// Build a FIX message with a single macro invocation.
 ///
 /// This expands to `begin_with(...).field(...).finish()` using `FixBuilder`.
-/// Supports `tag => value` pairs, tagged values (`@value`), and legacy `tag, value` pairs.
+/// Supports:
+/// - `tag => value` for infallible fields
+/// - `?tag => value` for fallible fields (currently `f64`); expands to
+///   `try_field_ref(...)?` and requires a `Result`-returning context
+/// - `@value` for tagged values whose tag is provided by the type
+/// - legacy `tag, value` pairs (equivalent to `tag => value`)
 #[macro_export]
 macro_rules! build_fix {
     ($builder:expr, $seq_out:expr, $dt:expr, $msg_type:expr $(,)?) => {{
@@ -24,6 +29,9 @@ macro_rules! build_fix {
     }};
     (@fields $msg:expr) => { $msg };
     (@fields $msg:expr, ) => { $msg };
+    (@fields $msg:expr, ? $tag:expr => $val:expr ,) => {
+        $msg.try_field_ref($tag as u32, &$val)?
+    };
     (@fields $msg:expr, $tag:expr => $val:expr ,) => {
         $msg.field_ref($tag as u32, &$val)
     };
@@ -32,6 +40,9 @@ macro_rules! build_fix {
     };
     (@fields $msg:expr, $tag:expr, $val:expr ,) => {
         $msg.field_ref($tag as u32, &$val)
+    };
+    (@fields $msg:expr, ? $tag:expr => $val:expr $(, $($rest:tt)+)?) => {
+        $crate::build_fix!(@fields $msg.try_field_ref($tag as u32, &$val)? $(, $($rest)+)?)
     };
     (@fields $msg:expr, $tag:expr => $val:expr $(, $($rest:tt)+)?) => {
         $crate::build_fix!(@fields $msg.field_ref($tag as u32, &$val) $(, $($rest)+)?)
@@ -205,13 +216,12 @@ impl FixValue for i32 {
 }
 
 const DIGITS_U16: [u16; 100] = digits_00_99_u16();
-impl FixValue for f64 {
-    #[inline]
-    fn encode(&self, out: &mut Vec<u8>) {
-        // infallible path: ("write nothing" == skip)
-        let _ = encode_f64_checked(*self, out);
-    }
-}
+
+// `f64` intentionally does NOT implement `FixValue`. Encoding can fail for
+// NaN/inf, and a silent infallible path would emit a malformed FIX field
+// (`tag=<SOH>`). Use `try_field` / `try_field_ref` / the `?tag => val` macro
+// arm to encode an `f64`, or use `FixedPrice<W, F>` for prices where finiteness
+// is statically guaranteed.
 
 #[inline]
 fn encode_f64_checked(mut value: f64, out: &mut Vec<u8>) -> bool {
@@ -884,7 +894,7 @@ mod tests {
 
     fn encode_f64(value: f64) -> String {
         let mut out = Vec::new();
-        value.encode(&mut out);
+        <f64 as TryFixValue>::try_encode(&value, &mut out).expect("test value is finite");
         String::from_utf8(out).expect("f64 encoding should be ASCII")
     }
 
@@ -1445,6 +1455,56 @@ mod tests {
         assert!(msg.starts_with(b"8=FIXT.1.1\x01"));
         verify_body_length(msg);
         verify_checksum(msg);
+    }
+
+    #[test]
+    fn macro_build_fix_supports_fallible_arrow_for_f64() {
+        // `?tag => val` expands to `try_field_ref(...)?` and requires a
+        // Result-returning context.
+        fn build_msg(builder: &mut FixBuilder) -> Result<&[u8], FixError> {
+            let dt = fixed_dt();
+            let price = 150.25_f64;
+            let qty = 100.0_f64;
+            Ok(build_fix!(
+                builder,
+                1u32,
+                dt,
+                FixMsgType::NewOrderSingle,
+                ?tags::PRICE => price,
+                ?tags::ORDER_QTY => qty,
+                @FixSide::Buy,
+            ))
+        }
+
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+        let msg = build_msg(&mut builder).unwrap();
+
+        assert_eq!(find_field(msg, tags::PRICE).unwrap(), b"150.25");
+        assert_eq!(find_field(msg, tags::ORDER_QTY).unwrap(), b"100");
+        assert_eq!(find_field(msg, tags::SIDE).unwrap(), b"1");
+        verify_body_length(msg);
+        verify_checksum(msg);
+    }
+
+    #[test]
+    fn macro_build_fix_propagates_f64_error_for_nan() {
+        fn build_msg(builder: &mut FixBuilder) -> Result<&[u8], FixError> {
+            let dt = fixed_dt();
+            Ok(build_fix!(
+                builder,
+                1u32,
+                dt,
+                FixMsgType::NewOrderSingle,
+                ?tags::PRICE => f64::NAN,
+            ))
+        }
+
+        let mut builder = FixBuilder::new("FIX.4.2", "S", "T");
+        let err = build_msg(&mut builder).unwrap_err();
+        assert!(matches!(
+            err,
+            FixError::InvalidValue { tag: tags::PRICE, .. }
+        ));
     }
 
     #[test]

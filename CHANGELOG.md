@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
 - `parse_u32_ascii` now returns `Option<u32>`, detecting non-digit bytes, empty input, and `u32` overflow. Previously, a `debug_assert!` was the only check, so release builds silently produced wrong arithmetic on malformed input — including for tags 9 (BodyLength) and 10 (CheckSum), where lax parsing was most dangerous. Malformed tag/value bytes now surface as `MalformedFix::InvalidFormat` via the checksum validator (or as a missing-field error during parsing).
 - `FixBuilder` now sizes its reserved header prefix from `fix_version.len() + MAX_BODY_LEN_DIGITS` at construction, replacing the hard-coded `HEADER_SPACE = 32` constant. Previously, a long `fix_version` (for example `FIXT.1.1`) combined with a large body could overflow the 32-byte prefix in release builds (the bound was protected only by `debug_assert!`). The new sizing is a by-construction invariant.
 
+### Removed (breaking)
+- `impl FixValue for f64` has been removed. The previous infallible path silently emitted a malformed FIX field (`tag=<SOH>`) when given `NaN` or `inf` because the tag header was written before encoding. Encoding `f64` now requires the fallible API (`try_field`, `try_field_ref`, or the new `?tag => value` macro arm), which surfaces `FixError::InvalidValue` for non-finite values. For values that are statically known to be finite (typical prices), prefer `FixedPrice<W, F>`.
+
+### Added (continued)
+- `build_fix!` macro now supports `?tag => value` for fallible fields. The arm expands to `try_field_ref(tag, &val)?` and requires the caller to be in a `Result`-returning context.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.
