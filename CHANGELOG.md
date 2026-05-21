@@ -36,6 +36,10 @@ All notable changes to this project will be documented in this file.
 - Documented the heuristics and limits of the repeating-group parser (same-first-tag boundary detection, no nested-group support, behavior when outer-struct tags overlap with element tags).
 - Documented the component-routing rules in the derive (tag sets must be disjoint from the outer struct; first-match-wins on overlap; optional components allowed).
 
+### Fixed
+- `FixedPrice<W, F>::from_str` no longer panics at runtime for `W + F > 18`. The bound is now a compile-time `assert!` inlined into `SCALE`, so any use of the type triggers the check at monomorphization time. Attempting to instantiate `FixedPrice<10, 10>` (sum 20) now fails to compile with a clear message rather than panicking on first parse.
+- `FixedPrice<W, F>::fmt::Display` no longer allocates. The previous implementation used `format!` to pad the fractional part with leading zeros and `String::pop` to trim trailing zeros; both have been replaced with in-place writes into a stack buffer. Also switched `i64::abs` to `i64::unsigned_abs` so the impl is safe for `i64::MIN`.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.

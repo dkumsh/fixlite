@@ -35,7 +35,15 @@ impl fmt::Display for ParsePriceError {
 impl std::error::Error for ParsePriceError {}
 
 impl<const W: u32, const F: u32> FixedPrice<W, F> {
-    const SCALE: i64 = 10i64.pow(F);
+    // Inlining the assertion into SCALE means any use of this type (which
+    // always goes through SCALE) triggers a compile-time error if W + F > 18.
+    const SCALE: i64 = {
+        assert!(
+            W + F <= 18,
+            "FixedPrice<W, F>: W + F must be <= 18 to fit in i64"
+        );
+        10i64.pow(F)
+    };
     const MAX_WHOLE: i64 = 10i64.pow(W).saturating_sub(1);
     const MAX_ABS: i64 = Self::MAX_WHOLE
         .checked_mul(Self::SCALE)
@@ -86,10 +94,7 @@ impl<const W: u32, const F: u32> FromStr for FixedPrice<W, F> {
     type Err = ParsePriceError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // ensure compile-time bounds
-        if W + F > 18 {
-            panic!("Total digits W+F must be ≤ 18");
-        }
+        // The `W + F <= 18` bound is enforced at compile time via `SCALE`.
         let s = s.trim();
         if s.is_empty() {
             return Err(ParsePriceError::InvalidFormat);
@@ -166,21 +171,33 @@ impl<const W: u32, const F: u32> fmt::Display for FixedPrice<W, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let raw = self.0;
         let negative = raw < 0;
-        let abs = raw.abs();
-        let whole = abs / FixedPrice::<W, F>::SCALE;
-        let frac = abs % FixedPrice::<W, F>::SCALE;
+        // `unsigned_abs` is safe for i64::MIN, unlike `abs`.
+        let abs = raw.unsigned_abs();
+        let scale = Self::SCALE as u64;
+        let whole = abs / scale;
+        let frac = abs % scale;
+
         if negative {
-            write!(f, "-")?;
+            f.write_str("-")?;
         }
         write!(f, "{}", whole)?;
+
         if frac != 0 {
-            // build fractional string with leading zeros
-            let mut s = format!("{:0>width$}", frac, width = F as usize);
-            // trim trailing zeros
-            while s.ends_with('0') {
-                s.pop();
+            let scale_digits = F as usize;
+            // Fractional part has at most F digits; F is bounded by W+F <= 18.
+            let mut buf = [b'0'; 18];
+            let mut x = frac;
+            for i in (0..scale_digits).rev() {
+                buf[i] = b'0' + (x % 10) as u8;
+                x /= 10;
             }
-            write!(f, ".{}", s)?;
+            let mut end = scale_digits;
+            while end > 0 && buf[end - 1] == b'0' {
+                end -= 1;
+            }
+            f.write_str(".")?;
+            // `buf[..end]` is ASCII digits by construction.
+            f.write_str(std::str::from_utf8(&buf[..end]).expect("ASCII digits"))?;
         }
         Ok(())
     }
@@ -241,6 +258,29 @@ mod tests {
         assert!((c.to_f64() - 3.57).abs() < 1e-12);
         let d = b - a;
         assert!((d.to_f64() - 1.11).abs() < 1e-12);
+    }
+
+    #[test]
+    fn display_handles_negative_and_zero_fractions() {
+        let zero: Price = "0".parse().unwrap();
+        assert_eq!(zero.to_string(), "0");
+
+        let whole_only: Price = "42".parse().unwrap();
+        assert_eq!(whole_only.to_string(), "42");
+
+        let neg: Price = "-1.25".parse().unwrap();
+        assert_eq!(neg.to_string(), "-1.25");
+
+        let neg_whole: Price = "-7".parse().unwrap();
+        assert_eq!(neg_whole.to_string(), "-7");
+
+        // Trailing zeros in the fractional part should be trimmed.
+        let trail: Price = "1.50".parse().unwrap();
+        assert_eq!(trail.to_string(), "1.5");
+
+        // Leading zeros in the fractional part should be preserved.
+        let lead: Price = "1.005".parse().unwrap();
+        assert_eq!(lead.to_string(), "1.005");
     }
 
     #[test]
