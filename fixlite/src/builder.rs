@@ -3,7 +3,9 @@ use chrono::{DateTime, Datelike, Timelike, Utc};
 
 /// FIX field delimiter (SOH / 0x01).
 pub const SOH: u8 = 0x01;
-const HEADER_SPACE: usize = 32; // bytes reserved for 8 & 9
+/// Maximum decimal digits required to encode a `usize` body length.
+/// `log10(usize::MAX) + 1 = 20` on 64-bit; an over-estimate on 32-bit is harmless.
+const MAX_BODY_LEN_DIGITS: usize = 20;
 
 /// Build a FIX message with a single macro invocation.
 ///
@@ -665,6 +667,8 @@ pub struct FixBuilder {
     target: Vec<u8>,
     buf: Vec<u8>,
     fix_version: Vec<u8>,
+    /// Reserved leading space sized for the worst-case `8=<ver><SOH>9=<len><SOH>` prefix.
+    prefix_space: usize,
 }
 
 impl FixBuilder {
@@ -684,11 +688,15 @@ impl FixBuilder {
         target: impl Into<String>,
         capacity: usize,
     ) -> Self {
+        let fix_version = fix_version.into().into_bytes();
+        // Worst-case "8=<ver><SOH>9=<body_len><SOH>" prefix.
+        let prefix_space = 2 + fix_version.len() + 1 + 2 + MAX_BODY_LEN_DIGITS + 1;
         Self {
-            fix_version: fix_version.into().into_bytes(),
+            fix_version,
             sender: sender.into().into_bytes(),
             target: target.into().into_bytes(),
-            buf: Vec::with_capacity(capacity.max(HEADER_SPACE + 64)),
+            buf: Vec::with_capacity(capacity.max(prefix_space + 64)),
+            prefix_space,
         }
     }
 
@@ -700,7 +708,7 @@ impl FixBuilder {
         TS: FixSendingTime + ?Sized,
     {
         self.buf.clear();
-        self.buf.resize(HEADER_SPACE, 0);
+        self.buf.resize(self.prefix_space, 0);
 
         let buf = &mut self.buf;
         kv(buf, 35, msg_type);
@@ -717,7 +725,7 @@ impl FixBuilder {
 
     /// Finalize: patch 8/9, compute checksum, append 10, return the message bytes.
     pub fn finish(&mut self) -> &[u8] {
-        let body_start = HEADER_SPACE;
+        let body_start = self.prefix_space;
         let body_end = self.buf.len();
         debug_assert!(body_end >= body_start);
 
@@ -725,7 +733,9 @@ impl FixBuilder {
 
         // header: "8=<fixver><SOH>9=<len><SOH>"
         let header_len = 2 + self.fix_version.len() + 1 + 2 + num_digits(body_len) + 1;
-        debug_assert!(header_len <= HEADER_SPACE);
+        // By construction: prefix_space was sized for MAX_BODY_LEN_DIGITS,
+        // and num_digits(body_len) <= MAX_BODY_LEN_DIGITS for any usize.
+        debug_assert!(header_len <= self.prefix_space);
 
         let header_start = body_start - header_len;
 
@@ -1411,6 +1421,28 @@ mod tests {
         assert_eq!(find_field(msg, 58).unwrap(), b"hello");
         assert_eq!(find_field(msg, 100).unwrap(), b"XNAS");
 
+        verify_body_length(msg);
+        verify_checksum(msg);
+    }
+
+    #[test]
+    fn long_fix_version_does_not_overflow_prefix() {
+        // "FIXT.1.1" is 8 bytes; combined with a large body it would have
+        // overflowed the old hard-coded HEADER_SPACE = 32. The prefix is now
+        // sized at construction from fix_version.len() + MAX_BODY_LEN_DIGITS,
+        // so this must produce a well-formed message.
+        let mut b = FixBuilder::new("FIXT.1.1", "S", "T");
+        let dt = fixed_dt();
+        let seq = 1u32;
+
+        // Build a message with a large body to exercise multi-digit body lengths.
+        let big_text: String = "x".repeat(5000);
+        let msg = b
+            .begin_with(&seq, &dt, &FixMsgType::NewOrderSingle)
+            .field_ref(58, &big_text)
+            .finish();
+
+        assert!(msg.starts_with(b"8=FIXT.1.1\x01"));
         verify_body_length(msg);
         verify_checksum(msg);
     }

@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - `parse_u32_ascii` now returns `Option<u32>`, detecting non-digit bytes, empty input, and `u32` overflow. Previously, a `debug_assert!` was the only check, so release builds silently produced wrong arithmetic on malformed input — including for tags 9 (BodyLength) and 10 (CheckSum), where lax parsing was most dangerous. Malformed tag/value bytes now surface as `MalformedFix::InvalidFormat` via the checksum validator (or as a missing-field error during parsing).
+- `FixBuilder` now sizes its reserved header prefix from `fix_version.len() + MAX_BODY_LEN_DIGITS` at construction, replacing the hard-coded `HEADER_SPACE = 32` constant. Previously, a long `fix_version` (for example `FIXT.1.1`) combined with a large body could overflow the 32-byte prefix in release builds (the bound was protected only by `debug_assert!`). The new sizing is a by-construction invariant.
 
 ## v0.6.2 - 2026-01-14
 ### Added
