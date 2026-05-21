@@ -141,6 +141,30 @@ mod ascii_validation_tests {
         let parsed: SimpleMessage = unsafe { crate::decode_unchecked(&msg) }.unwrap();
         assert_eq!(parsed.msg_type, MsgType::NewOrderSingle);
     }
+
+    #[derive(Debug, fixlite_derive::FixDeserialize)]
+    struct MessageWithRequiredField<'a> {
+        #[fix(tag = 35)]
+        #[allow(dead_code)]
+        msg_type: MsgType,
+        #[fix(tag = 11)]
+        #[allow(dead_code)]
+        cl_ord_id: &'a str,
+    }
+
+    #[test]
+    fn missing_field_error_carries_fix_tag() {
+        // Build a message that's missing tag 11.
+        let msg = build_valid_message();
+        let err = crate::decode::<MessageWithRequiredField>(&msg).unwrap_err();
+        match err {
+            FixError::MissingField { name, tag } => {
+                assert_eq!(name, "cl_ord_id");
+                assert_eq!(tag, 11);
+            }
+            other => panic!("expected MissingField {{ tag: 11 }}, got {other:?}"),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "checksum"))]

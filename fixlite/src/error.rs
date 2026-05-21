@@ -36,8 +36,10 @@ pub enum FixError {
         /// Enum type name (or tag name) for debugging.
         ty: &'static str,
     },
-    #[error("Missing required field {0}")]
-    MissingField(&'static str),
+    #[error("Missing required field {name} (tag {tag})")]
+    MissingField { name: &'static str, tag: u32 },
+    #[error("Missing required component {0}")]
+    MissingComponent(&'static str),
     #[error("UTF-8 parsing error")]
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("DateTime parsing error")]

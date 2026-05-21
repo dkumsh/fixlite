@@ -20,7 +20,10 @@ pub fn get_msg_type(fix_message: &[u8], delimiter: Option<u8>) -> Result<MsgType
             return MsgType::from_str(value);
         }
     }
-    Err(FixError::MissingField("35[MsgType]"))
+    Err(FixError::MissingField {
+        name: "msg_type",
+        tag: 35,
+    })
 }
 
 /// A calendar day‐of‐month in the range 1–31.

@@ -28,6 +28,9 @@ All notable changes to this project will be documented in this file.
 ### Dependencies
 - `serde` is now an optional dependency gated behind the `serde` feature flag. Previously, `FixedPrice<W, F>`'s `Serialize` / `Deserialize` derives pulled `serde` + `serde_derive` unconditionally for every fixlite user. Users who need serde support now enable `fixlite = { ..., features = ["serde"] }`; everyone else pays nothing.
 
+### Changed (breaking)
+- `FixError::MissingField(&'static str)` is now `FixError::MissingField { name: &'static str, tag: u32 }`, carrying the FIX tag number alongside the Rust field name. The error message becomes `"Missing required field cl_ord_id (tag 11)"` — a counterparty operator can read it in FIX terms. A separate `FixError::MissingComponent(&'static str)` variant covers `#[fix(component)]` fields, which have no single tag. Code that pattern-matches `MissingField("...")` needs updating to `MissingField { name, .. }`.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.

@@ -168,10 +168,11 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         );
                         component_handlers.push(handler);
 
-                        // ⬇ NEW: we still need the field-check!
+                        // Components have no single FIX tag; emit MissingComponent on miss.
                         field_checks.push(generate_field_check(
                             field_name,
                             field_type,
+                            None,
                             &fixlite_path,
                         ));
                     } else if let Some(tag) = tag_value {
@@ -194,6 +195,7 @@ pub fn fix_deserialize_derive(input: TokenStream) -> TokenStream {
                         field_checks.push(generate_field_check(
                             field_name,
                             field_type,
+                            Some(tag),
                             &fixlite_path,
                         ));
                     }
@@ -415,6 +417,7 @@ fn generate_component_parser(
 fn generate_field_check(
     field_name: &Ident,
     field_type: &Type,
+    tag: Option<u32>,
     fixlite_path: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let field_var = format_ident!("{}_tmp", field_name);
@@ -435,9 +438,21 @@ fn generate_field_check(
         quote! {
             let #field_name = #field_var;
         }
-    } else {
+    } else if let Some(tag) = tag {
         quote! {
-            let #field_name = #field_var.ok_or(#fixlite_path::FixError::MissingField(stringify!(#field_name)))?;
+            let #field_name = #field_var.ok_or(
+                #fixlite_path::FixError::MissingField {
+                    name: stringify!(#field_name),
+                    tag: #tag,
+                }
+            )?;
+        }
+    } else {
+        // Component fields have no single FIX tag.
+        quote! {
+            let #field_name = #field_var.ok_or(
+                #fixlite_path::FixError::MissingComponent(stringify!(#field_name))
+            )?;
         }
     }
 }
