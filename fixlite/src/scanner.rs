@@ -126,7 +126,7 @@ impl<'a> TagCursor<'a> {
     #[inline]
     pub fn peek_tag_u32(&self) -> Option<u32> {
         self.position
-            .map(|(start, eq, _)| parse_u32_ascii(&self.s[start..eq]))
+            .and_then(|(start, eq, _)| parse_u32_ascii(&self.s[start..eq]))
     }
 
     #[cfg(feature = "checksum")]
@@ -134,15 +134,19 @@ impl<'a> TagCursor<'a> {
         if self.checksum_done {
             return;
         }
-        let tag = parse_u32_ascii(&self.s[start..eq]);
+        let Some(tag) = parse_u32_ascii(&self.s[start..eq]) else {
+            // Leave body_length / checksum_expected unset; validate_checksum
+            // surfaces this as MalformedFix::InvalidFormat.
+            return;
+        };
         if tag == 10 {
             self.checksum_tag_start = Some(start);
-            self.checksum_expected = Some(parse_u32_ascii(&self.s[eq + 1..end]));
+            self.checksum_expected = parse_u32_ascii(&self.s[eq + 1..end]);
             self.checksum_done = true;
             return;
         }
         if tag == 9 {
-            self.body_length = Some(parse_u32_ascii(&self.s[eq + 1..end]));
+            self.body_length = parse_u32_ascii(&self.s[eq + 1..end]);
             self.body_start = Some(end + 1);
         }
         self.checksum_sum = self.checksum_sum.wrapping_add(field_sum);
@@ -175,12 +179,53 @@ impl<'a> TagCursor<'a> {
     }
 }
 
+/// Parse an ASCII-digit byte slice into `u32`.
+///
+/// Returns `None` for empty input, any non-digit byte, or arithmetic overflow.
 #[inline]
-pub fn parse_u32_ascii(bytes: &[u8]) -> u32 {
+pub fn parse_u32_ascii(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() {
+        return None;
+    }
     let mut n: u32 = 0;
     for &b in bytes {
-        debug_assert!(b.is_ascii_digit());
-        n = n * 10 + (b - b'0') as u32;
+        let d = b.wrapping_sub(b'0');
+        if d > 9 {
+            return None;
+        }
+        n = n.checked_mul(10)?.checked_add(d as u32)?;
     }
-    n
+    Some(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_u32_ascii;
+
+    #[test]
+    fn empty_input_returns_none() {
+        assert_eq!(parse_u32_ascii(b""), None);
+    }
+
+    #[test]
+    fn non_digit_byte_returns_none() {
+        assert_eq!(parse_u32_ascii(b"12a"), None);
+        assert_eq!(parse_u32_ascii(b"a12"), None);
+        assert_eq!(parse_u32_ascii(b"1 2"), None);
+        assert_eq!(parse_u32_ascii(b"-1"), None);
+    }
+
+    #[test]
+    fn overflow_returns_none() {
+        // u32::MAX = 4294967295 (10 digits).
+        assert_eq!(parse_u32_ascii(b"4294967296"), None);
+        assert_eq!(parse_u32_ascii(b"99999999999"), None);
+    }
+
+    #[test]
+    fn valid_input_parses() {
+        assert_eq!(parse_u32_ascii(b"0"), Some(0));
+        assert_eq!(parse_u32_ascii(b"123"), Some(123));
+        assert_eq!(parse_u32_ascii(b"4294967295"), Some(u32::MAX));
+    }
 }

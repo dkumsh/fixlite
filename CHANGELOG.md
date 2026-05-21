@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ### Migration
 - If you were calling `decode` with input that may contain non-ASCII bytes, you now need to either pre-filter the bytes or call `decode_unchecked` (and uphold its safety contract). For all FIX-compliant traffic, no changes are required.
 
+### Fixed
+- `parse_u32_ascii` now returns `Option<u32>`, detecting non-digit bytes, empty input, and `u32` overflow. Previously, a `debug_assert!` was the only check, so release builds silently produced wrong arithmetic on malformed input — including for tags 9 (BodyLength) and 10 (CheckSum), where lax parsing was most dangerous. Malformed tag/value bytes now surface as `MalformedFix::InvalidFormat` via the checksum validator (or as a missing-field error during parsing).
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.
