@@ -220,4 +220,6 @@ let message = raw
 let parsed: TestMessage = fixlite::decode(&message)?;
 ```
 ## License
-This project is dual-licensed under MIT OR LGPL-3.0-or-later. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-LGPL-3.0](LICENSE-LGPL-3.0) files for details.
+This project is dual-licensed under MIT OR Apache-2.0, at your option. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE-2.0](LICENSE-APACHE-2.0) files for details.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

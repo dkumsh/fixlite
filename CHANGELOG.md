@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 ### Added (continued)
 - `build_fix!` macro now supports `?tag => value` for fallible fields. The arm expands to `try_field_ref(tag, &val)?` and requires the caller to be in a `Result`-returning context.
 
+### Licensing
+- Changed dual license from `MIT OR LGPL-3.0-or-later` to `MIT OR Apache-2.0`, matching the Rust ecosystem standard. Apache-2.0 adds an explicit patent grant (relevant for users in regulated finance) and removes the corporate-legal friction caused by LGPL appearing in the license string. Adopters retain the option to choose MIT as before; nothing about MIT changes.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.
