@@ -80,6 +80,17 @@ pub trait TryFixValue {
 impl TryFixValue for f64 {
     type Error = FixError;
 
+    /// Encode an `f64` into a FIX field value.
+    ///
+    /// Wire contract: 15 significant decimal digits, banker's rounding
+    /// (round-half-to-even), no exponential notation, trailing fractional
+    /// zeros trimmed. `NaN` and infinities return `FixError::InvalidValue`.
+    ///
+    /// This is *not* shortest-round-trippable: parsing the emitted bytes
+    /// back as `f64` may yield a value differing in the last few low bits.
+    /// For values where the last bit matters, prefer `FixedPrice<W, F>`.
+    /// See `fixlite_example/benches/f64_encode_bench.rs` for the perf
+    /// motivation behind the custom path.
     #[inline]
     fn try_encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error> {
         if encode_f64_checked(*self, out) {

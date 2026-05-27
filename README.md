@@ -161,6 +161,23 @@ let msg = builder
 
 When you know finiteness statically (typical for prices), prefer `FixedPrice<W, F>` (or its alias `Price`), which encodes without allocation and has no NaN concerns.
 
+#### Wire contract for `f64`
+
+The encoder rounds to **15 significant decimal digits** using **banker's rounding** (round-half-to-even), emits no exponential notation, and trims trailing fractional zeros. Examples:
+
+| Input `f64`         | Output      | Notes                                       |
+|---------------------|-------------|---------------------------------------------|
+| `0.0`               | `0`         | integer-only                                |
+| `150.25`            | `150.25`    | exactly representable                       |
+| `0.1 + 0.2`         | `0.3`       | 15-digit rounding collapses the FP residue  |
+| `1.0 / 3.0`         | `0.333333333333333` | 15 significant digits             |
+| `1e-10`             | `0.0000000001` | no exponential notation                  |
+| `f64::NAN` / `inf`  | error       | returns `FixError::InvalidValue { tag, .. }`|
+
+This differs from Rust's stdlib `Display` (and from `ryu`), which both emit the shortest decimal that round-trips back to the exact `f64` bit pattern — e.g., stdlib renders `0.1 + 0.2` as `"0.30000000000000004"`. The choice trades round-trip exactness for a representation that hides the user's floating-point artifacts and runs ~2.65× faster than stdlib on typical FIX-shaped values (see `fixlite_example/benches/f64_encode_bench.rs`).
+
+**When exact precision matters** (auditable prices, regulatory reporting, anywhere the last bit needs to round-trip), use `FixedPrice<W, F>` rather than `f64`. `FixedPrice` encodes with bounded scale, no rounding, and no allocation.
+
 ### `build_fix!` macro
 
 You can also use the build_fix! macro. It supports four arms:

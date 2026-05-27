@@ -23,3 +23,7 @@ harness = false
 [[bench]]
 name = "builder_bench"
 harness = false
+
+[[bench]]
+name = "f64_encode_bench"
+harness = false

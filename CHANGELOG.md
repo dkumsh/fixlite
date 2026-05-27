@@ -40,6 +40,10 @@ All notable changes to this project will be documented in this file.
 - `FixedPrice<W, F>::from_str` no longer panics at runtime for `W + F > 18`. The bound is now a compile-time `assert!` inlined into `SCALE`, so any use of the type triggers the check at monomorphization time. Attempting to instantiate `FixedPrice<10, 10>` (sum 20) now fails to compile with a clear message rather than panicking on first parse.
 - `FixedPrice<W, F>::fmt::Display` no longer allocates. The previous implementation used `format!` to pad the fractional part with leading zeros and `String::pop` to trim trailing zeros; both have been replaced with in-place writes into a stack buffer. Also switched `i64::abs` to `i64::unsigned_abs` so the impl is safe for `i64::MIN`.
 
+### Documentation (continued)
+- Documented the wire contract for `f64` encoding (15 significant digits, banker's rounding, no exponential notation, trailing-zero trimming) in both the README and a doc comment on `TryFixValue for f64`. Previously this was implicit in the implementation. Users now have an explicit reference for the format and a steer toward `FixedPrice<W, F>` when round-trip exactness matters.
+- Added `fixlite_example/benches/f64_encode_bench.rs` comparing the custom encoder against stdlib's `write!` (~2.65× faster on FIX-shaped inputs), kept as a regression baseline.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.
