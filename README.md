@@ -286,7 +286,7 @@ let parsed: TestMessage = fixlite::decode(&message)?;
 ```
 ## Fuzzing
 
-A `cargo-fuzz` harness for `decode` lives in `fixlite/fuzz/`. It feeds coverage-guided random bytes to the parser and looks for panics, hangs, sanitizer violations, or other crashes. To run:
+A `cargo-fuzz` harness for `decode` lives at the workspace root under `fuzz/`. It feeds coverage-guided random bytes to the parser and looks for panics, hangs, sanitizer violations, or other crashes. To run:
 
 ```bash
 # One-time setup
@@ -294,11 +294,10 @@ rustup install nightly
 cargo install cargo-fuzz
 
 # Run the decode target (Ctrl-C to stop)
-cd fixlite
 cargo +nightly fuzz run decode
 ```
 
-Crashes land in `fixlite/fuzz/artifacts/decode/` as minimum reproducers. The corpus accumulates in `fixlite/fuzz/corpus/decode/`; both directories are gitignored. The harness uses a maximally-permissive `Option`-everywhere struct so most inputs exercise the parser end-to-end rather than failing the first required-field check.
+Crashes land in `fuzz/artifacts/decode/` as minimum reproducers. The corpus accumulates in `fuzz/corpus/decode/`; both directories are gitignored. The harness uses a maximally-permissive `Option`-everywhere struct so most inputs exercise the parser end-to-end rather than failing the first required-field check.
 
 ## License
 This project is dual-licensed under MIT OR Apache-2.0, at your option. See the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE-2.0](LICENSE-APACHE-2.0) files for details.

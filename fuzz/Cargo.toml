@@ -12,11 +12,12 @@ libfuzzer-sys = "0.4"
 chrono = "0.4"
 
 [dependencies.fixlite]
-path = ".."
+path = "../fixlite"
 features = ["derive", "checksum"]
 
 # Standalone workspace so the fuzz crate is excluded from the parent.
 [workspace]
+members = ["."]
 
 [[bin]]
 name = "decode"
