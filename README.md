@@ -294,7 +294,13 @@ rustup install nightly
 cargo install cargo-fuzz
 
 # Run the decode target (Ctrl-C to stop)
-cargo +nightly fuzz run decode
+just fuzz                # equivalent to: cargo +nightly fuzz run decode
+
+# Run for a fixed time (good for CI)
+just fuzz-for 60         # 60 seconds, then stop
+
+# Just compile-check the harness without running
+just fuzz-build
 ```
 
 Crashes land in `fuzz/artifacts/decode/` as minimum reproducers. The corpus accumulates in `fuzz/corpus/decode/`; both directories are gitignored. The harness uses a maximally-permissive `Option`-everywhere struct so most inputs exercise the parser end-to-end rather than failing the first required-field check.

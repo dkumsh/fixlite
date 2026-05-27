@@ -31,6 +31,18 @@ test:
 bench:
     cargo bench
 
+# build a fuzz target (default: decode) — quick check that the harness compiles
+fuzz-build TARGET="decode":
+    cargo +nightly fuzz build {{TARGET}}
+
+# run a fuzz target until Ctrl-C (default: decode); requires nightly + cargo-fuzz
+fuzz TARGET="decode":
+    cargo +nightly fuzz run {{TARGET}}
+
+# run a fuzz target for SECONDS then stop (default: 60s on decode); good for CI
+fuzz-for SECONDS="60" TARGET="decode":
+    cargo +nightly fuzz run {{TARGET}} -- -max_total_time={{SECONDS}}
+
 
 # Release a new version of fixlite.
 # Usage:
