@@ -5,7 +5,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/dkumsh/fixlite"
 edition = "2024"
 keywords = ["fix", "serialization"]
-version = "0.6.2"
+version = "0.7.0"
 readme = "README.md"
 
 [workspace]

@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.7.0 - 2026-05-27
 ### Added
 - `decode_unchecked` / `FixDeserialize::from_fix_unchecked` (`unsafe`) entry points for callers that have already verified their input.
 - `MalformedFix::NonAsciiByte` error variant.
