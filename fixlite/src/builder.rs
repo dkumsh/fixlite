@@ -1514,7 +1514,10 @@ mod tests {
         let err = build_msg(&mut builder).unwrap_err();
         assert!(matches!(
             err,
-            FixError::InvalidValue { tag: tags::PRICE, .. }
+            FixError::InvalidValue {
+                tag: tags::PRICE,
+                ..
+            }
         ));
     }
 
