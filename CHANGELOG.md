@@ -44,6 +44,9 @@ All notable changes to this project will be documented in this file.
 - Documented the wire contract for `f64` encoding (15 significant digits, banker's rounding, no exponential notation, trailing-zero trimming) in both the README and a doc comment on `TryFixValue for f64`. Previously this was implicit in the implementation. Users now have an explicit reference for the format and a steer toward `FixedPrice<W, F>` when round-trip exactness matters.
 - Added `fixlite_example/benches/f64_encode_bench.rs` comparing the custom encoder against stdlib's `write!` (~2.65× faster on FIX-shaped inputs), kept as a regression baseline.
 
+### Tooling
+- Added a `cargo-fuzz` harness at `fixlite/fuzz/` with a `decode` target. The harness feeds coverage-guided random bytes to `fixlite::decode` to catch panics, hangs, integer overflows, and sanitizer violations that escape the unit-test suite. The fuzz crate is a standalone workspace (excluded from the parent) so it does not affect normal builds. Run with `cargo +nightly fuzz run decode` (after `cargo install cargo-fuzz` and `rustup install nightly`). See the new "Fuzzing" section in the README.
+
 ## v0.6.2 - 2026-01-14
 ### Added
 - Expanded `tags` module with commonly used session, order/execution, instrument, and market data tags.

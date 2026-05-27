@@ -1,0 +1,26 @@
+[package]
+name = "fixlite-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+chrono = "0.4"
+
+[dependencies.fixlite]
+path = ".."
+features = ["derive", "checksum"]
+
+# Standalone workspace so the fuzz crate is excluded from the parent.
+[workspace]
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
